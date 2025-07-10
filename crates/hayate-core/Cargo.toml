@@ -1,0 +1,11 @@
+[package]
+name = "hayate-core"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+futures.workspace = true
+async-trait.workspace = true

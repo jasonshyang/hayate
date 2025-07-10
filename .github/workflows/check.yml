@@ -1,0 +1,66 @@
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+name: check
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    name: stable / fmt
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # tag=v4.2.2
+        with:
+          submodules: true
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b # branch=master
+        with:
+          toolchain: stable
+          components: rustfmt
+      - name: cargo fmt --check
+        run: cargo fmt --check
+  clippy:
+    runs-on: ubuntu-latest
+    name: ${{ matrix.toolchain }} / clippy
+    permissions:
+      contents: read
+      checks: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # Get early warning of new lints which are regularly introduced in beta channels.
+        toolchain: [stable, beta]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # tag=v4.2.2
+        with:
+          submodules: true
+      - name: Install ${{ matrix.toolchain }}
+        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b # branch=master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          components: clippy
+      - name: cargo clippy
+        uses: giraffate/clippy-action@13b9d32482f25d29ead141b79e7e04e7900281e0 # tag=v1.0.1
+        with:
+          reporter: 'github-pr-check'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+  semver:
+    runs-on: ubuntu-latest
+    name: semver
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # tag=v4.2.2
+        with:
+          submodules: true
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b # branch=master
+        with:
+          toolchain: stable
+          components: rustfmt
+      - name: cargo-semver-checks
+        uses: obi1kenobi/cargo-semver-checks-action@7272cc2caa468d3e009a2b0a9cc366839348237b # tag=v2
