@@ -1,6 +1,7 @@
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_util::sync::CancellationToken;
 
 #[async_trait::async_trait]
 pub trait WsHandler: Send + Sync {
@@ -12,6 +13,7 @@ pub trait WsHandler: Send + Sync {
 pub struct WsClient<H> {
     url: String,
     handler: H,
+    shutdown: CancellationToken,
 }
 
 impl<H> WsClient<H>
@@ -19,9 +21,23 @@ where
     H: WsHandler + 'static,
 {
     pub fn new(url: impl Into<String>, handler: H) -> Self {
+        let shutdown = CancellationToken::new();
         Self {
             url: url.into(),
             handler,
+            shutdown,
+        }
+    }
+
+    pub fn new_with_shutdown(
+        url: impl Into<String>,
+        handler: H,
+        shutdown: CancellationToken,
+    ) -> Self {
+        Self {
+            url: url.into(),
+            handler,
+            shutdown,
         }
     }
 
@@ -45,16 +61,28 @@ where
         self.handler.on_open(tx).await?;
 
         // Connection loop
-        while let Some(message) = read.next().await {
-            match message {
-                Ok(msg) => {
-                    if let Err(e) = self.handler.on_message(msg).await {
-                        tracing::error!("Error handling message: {}", e);
-                        break;
+        loop {
+            tokio::select! {
+                message = read.next() => {
+                    match message {
+                        Some(Ok(msg)) => {
+                            if let Err(e) = self.handler.on_message(msg).await {
+                                tracing::error!("Error handling message: {}", e);
+                                break;
+                            }
+                        }
+                        Some(Err(e)) => {
+                            tracing::error!("WebSocket error: {}", e);
+                            break;
+                        }
+                        None => {
+                            tracing::info!("WebSocket client closed by server.");
+                            break;
+                        }
                     }
                 }
-                Err(e) => {
-                    tracing::error!("WebSocket error: {}", e);
+                _ = self.shutdown.cancelled() => {
+                    tracing::info!("WebSocket client shutdown initiated.");
                     break;
                 }
             }
@@ -64,7 +92,7 @@ where
         if let Err(e) = self.handler.on_close().await {
             tracing::error!("Error during close: {}", e);
         } else {
-            tracing::info!("WebSocket connection closed gracefully.");
+            tracing::info!("WebSocket client closed gracefully.");
         }
 
         Ok(())

@@ -15,6 +15,7 @@ anyhow = "1"
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = { version = "0.27.0", features = ["native-tls"] }
 tokio-stream = "0.1.17"
+tokio-util = "0.7.15"
 futures = "0.3.31"
 futures-util = "0.3.31"
 async-trait = "0.1.88"
