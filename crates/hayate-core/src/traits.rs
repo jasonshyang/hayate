@@ -13,8 +13,8 @@ pub trait Collector<E>: Send + Sync {
 
 #[async_trait::async_trait]
 pub trait State<E>: Send + Sync {
-    async fn sync(&mut self) -> Result<()>;
     fn name(&self) -> &str;
+    async fn sync(&mut self) -> Result<()>;
     fn process_event(&mut self, event: E) -> Result<()>;
 }
 

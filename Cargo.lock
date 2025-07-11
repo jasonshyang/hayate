@@ -85,6 +85,12 @@ dependencies = [
 [[package]]
 name = "bot"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "hayate-core",
+ "serde",
+]
 
 [[package]]
 name = "bumpalo"
