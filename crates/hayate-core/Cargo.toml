@@ -9,3 +9,4 @@ tokio.workspace = true
 tokio-stream.workspace = true
 futures.workspace = true
 async-trait.workspace = true
+tracing.workspace = true

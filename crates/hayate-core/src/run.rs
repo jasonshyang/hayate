@@ -30,13 +30,16 @@ where
     for exec in executor {
         let mut action_rx = action_tx.subscribe();
         set.spawn(async move {
-            println!("Starting Executor...");
+            tracing::info!("Starting Executor...");
             while let Ok(action) = action_rx.recv().await {
                 if let Err(e) = exec.execute(action).await {
-                    eprintln!("Error executing action: {}", e);
+                    tracing::error!("Error executing action: {}", e);
+                    break;
+                } else {
+                    tracing::info!("Action executed successfully.");
                 }
             }
-            println!("Executor finished.");
+            tracing::info!("Executor finished.");
         });
     }
 
@@ -45,10 +48,10 @@ where
         let mut event_rx = event_tx.subscribe();
 
         set.spawn(async move {
-            println!("Starting State");
+            tracing::info!("Starting State");
             let mut state_lock = state.write().await;
             state_lock.sync().await.unwrap();
-            println!("State {} synced.", state_lock.name());
+            tracing::info!("State {} synced.", state_lock.name());
             drop(state_lock);
 
             loop {
@@ -57,25 +60,25 @@ where
                         Ok(event) => {
                             let mut state_lock = state.write().await;
                             if let Err(e) = state_lock.process_event(event.clone()) {
-                                eprintln!("Error processing event in state {}: {}", state_lock.name(), e);
+                                tracing::error!("Error processing event: {}", e);
                                 break;
                             }
                             drop(state_lock);
                         }
                         Err(_) => {
-                            eprintln!("State Event channel closed");
+                            tracing::info!("Event channel closed, stopping state.");
                             break;
                         },
                     },
                 }
             }
-            println!("State finished.");
+            tracing::info!("State finished.");
         });
     }
 
     // Start bot
     set.spawn(async move {
-        println!("Starting Strategy...");
+        tracing::info!("Starting Bot...");
         let mut interval = tokio::time::interval(Duration::from_millis(bot.interval()));
 
         loop {
@@ -85,12 +88,15 @@ where
                 Ok(actions) => {
                     for action in actions {
                         if let Err(e) = action_tx.send(action) {
-                            eprintln!("Failed to send action: {}", e);
+                            tracing::error!("Error sending action: {}", e);
+                            continue;
+                        } else {
+                            tracing::info!("Action sent successfully.");
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("Error evaluating strategy: {}", e);
+                    tracing::error!("Error evaluating bot: {}", e);
                     continue;
                 }
             }
@@ -101,7 +107,7 @@ where
     for collector in collectors {
         let sender = event_tx.clone();
         set.spawn(async move {
-            println!("Starting Collector...");
+            tracing::info!("Starting Collector...");
             let mut event_stream = collector.get_event_stream().await.unwrap();
             while let Some(event) = event_stream.next().await {
                 match sender.send(event) {
@@ -109,7 +115,7 @@ where
                     Err(_) => break,
                 }
             }
-            println!("Collector finished.");
+            tracing::info!("Collector finished.");
         });
     }
 
