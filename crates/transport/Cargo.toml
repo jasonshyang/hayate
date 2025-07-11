@@ -9,6 +9,7 @@ tracing.workspace = true
 tokio.workspace = true
 tokio-tungstenite.workspace = true
 tokio-stream.workspace = true
+tokio-util.workspace = true
 futures-util.workspace = true
 async-trait.workspace = true
 reqwest.workspace = true

@@ -1,6 +1,7 @@
 use crate::bybit::types::{BybitMessage, BYBIT_ENDPOINT};
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_util::sync::CancellationToken;
 use transport::{WsClient, WsHandler};
 
 pub struct BybitClient {
@@ -18,6 +19,15 @@ impl BybitClient {
     pub fn new(update_sender: mpsc::UnboundedSender<BybitMessage>) -> Self {
         let handler = BybitWsHandler::new(update_sender);
         let client = WsClient::new(BYBIT_ENDPOINT, handler);
+        Self { inner: client }
+    }
+
+    pub fn new_with_shutdown(
+        update_sender: mpsc::UnboundedSender<BybitMessage>,
+        shutdown: CancellationToken,
+    ) -> Self {
+        let handler = BybitWsHandler::new(update_sender);
+        let client = WsClient::new_with_shutdown(BYBIT_ENDPOINT, handler, shutdown);
         Self { inner: client }
     }
 
@@ -82,8 +92,10 @@ impl WsHandler for BybitWsHandler {
     }
 
     async fn on_close(&mut self) -> anyhow::Result<()> {
-        tracing::info!("WebSocket connection closed");
-        // TODO: Handle WebSocket close event
+        tracing::info!("Bybit Websocket connection closed");
+        self.ws_sender = None;
+
+        // TODO: Handle any cleanup if necessary
         Ok(())
     }
 }
