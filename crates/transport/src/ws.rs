@@ -9,12 +9,12 @@ pub trait WsHandler: Send + Sync {
     async fn on_close(&mut self) -> anyhow::Result<()>;
 }
 
-pub struct Socket<H> {
+pub struct WsClient<H> {
     url: String,
     handler: H,
 }
 
-impl<H> Socket<H>
+impl<H> WsClient<H>
 where
     H: WsHandler + 'static,
 {
