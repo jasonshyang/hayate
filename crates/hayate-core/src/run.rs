@@ -6,21 +6,23 @@ use tokio::{
 };
 use tokio_stream::StreamExt;
 
-use crate::traits::{Bot, Collector, Executor, State};
+use crate::traits::{Bot, Collector, Executor, Input, State};
 
-pub fn run_bot<B, E, A, S>(
-    collectors: Vec<Box<dyn Collector<E>>>,
+pub fn run_bot<B, S, E, A, I>(
+    bot: B,
     states: Vec<Arc<RwLock<S>>>,
+    collectors: Vec<Box<dyn Collector<E>>>,
     executor: Vec<Box<dyn Executor<A>>>,
 ) -> JoinSet<()>
 where
-    B: Bot<S, A> + 'static,
+    B: Bot<I, A> + Send + Sync + 'static,
+    S: State<E> + Send + Sync + 'static,
     E: Clone + Send + Sync + 'static,
     A: Clone + Send + Sync + 'static,
-    S: State<E> + 'static,
+    I: Input<S> + Send + Sync + 'static,
 {
     let mut set = JoinSet::new();
-    let bot = B::new(states.clone());
+    let states_clone = states.clone();
 
     // Set up bot internal channels
     let (event_tx, _) = broadcast::channel::<E>(1024);
@@ -36,7 +38,7 @@ where
                     tracing::error!("Error executing action: {}", e);
                     break;
                 } else {
-                    tracing::info!("Action executed successfully.");
+                    tracing::debug!("Action executed successfully.");
                 }
             }
             tracing::info!("Executor finished.");
@@ -79,19 +81,31 @@ where
     // Start bot
     set.spawn(async move {
         tracing::info!("Starting Bot...");
-        let mut interval = tokio::time::interval(Duration::from_millis(bot.interval()));
+        let mut interval = tokio::time::interval(Duration::from_millis(bot.interval_ms()));
 
         loop {
             interval.tick().await;
 
-            match bot.evaluate() {
+            let mut input = I::empty();
+
+            // FIXME: distribute the state reading
+            for state in &states_clone {
+                let lock = state.read().await;
+                if let Err(e) = input.read_state(&*lock) {
+                    tracing::error!("Error reading state: {}", e);
+                    continue;
+                }
+                drop(lock);
+            }
+
+            match bot.evaluate(input) {
                 Ok(actions) => {
                     for action in actions {
                         if let Err(e) = action_tx.send(action) {
                             tracing::error!("Error sending action: {}", e);
                             continue;
                         } else {
-                            tracing::info!("Action sent successfully.");
+                            tracing::debug!("Action sent successfully.");
                         }
                     }
                 }

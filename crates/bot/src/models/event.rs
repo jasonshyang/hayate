@@ -1,10 +1,18 @@
 use crate::models::{Decimal, OrderEntry, Side};
 
+#[derive(Debug, Clone)]
+pub enum BotEvent {
+    OrderBookEvent(OrderBookEvent),
+    BotTradeEvent(BotTradeEvent),
+}
+
+#[derive(Debug, Clone)]
 pub enum OrderBookEvent {
     Snapshot(OrderBookUpdate),
     Delta(OrderBookUpdate),
 }
 
+#[derive(Debug, Clone)]
 pub struct OrderBookUpdate {
     pub symbol: String,
     pub updated_at: u64,
@@ -12,10 +20,12 @@ pub struct OrderBookUpdate {
     pub asks: Vec<OrderEntry>,
 }
 
+#[derive(Debug, Clone)]
 pub enum BotTradeEvent {
     TradeExecuted(TradeExecuted),
 }
 
+#[derive(Debug, Clone)]
 pub struct TradeExecuted {
     pub symbol: String,
     pub price: Decimal,

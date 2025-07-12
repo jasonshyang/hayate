@@ -64,16 +64,16 @@ impl WsHandler for BybitWsHandler {
             // Handle incoming WebSocket messages
             match message {
                 Message::Text(text) => {
-                    tracing::info!("Received text message: {}", text);
+                    tracing::debug!("Received text message: {}", text);
                     let msg: BybitMessage = serde_json::from_str(&text)
                         .map_err(|e| anyhow::anyhow!("Failed to parse message: {}", e))?;
-                    tracing::info!("Parsed message: {:?}", msg);
+                    tracing::debug!("Parsed message: {:?}", msg);
                     self.msg_sender
                         .send(msg)
                         .map_err(|e| anyhow::anyhow!("Failed to send update: {}", e))?;
                 }
                 Message::Ping(ping) => {
-                    tracing::info!("Received ping: {:?}", ping);
+                    tracing::debug!("Received ping: {:?}", ping);
                     ws_sender.send(Message::Pong(ping))?;
                 }
                 Message::Close(_) => {
