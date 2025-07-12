@@ -88,8 +88,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "clients",
  "hayate-core",
  "serde",
+ "tokio",
+ "tokio-stream",
+ "tracing",
 ]
 
 [[package]]
