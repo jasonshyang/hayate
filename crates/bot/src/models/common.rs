@@ -16,6 +16,7 @@ impl Side {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct OrderEntry {
     pub side: Side,
     pub price: Decimal,

@@ -1,7 +1,6 @@
-use std::{pin::Pin, sync::Arc};
+use std::pin::Pin;
 
 use anyhow::Result;
-use tokio::sync::RwLock;
 use tokio_stream::Stream;
 
 pub type CollectorStream<'a, E> = Pin<Box<dyn Stream<Item = E> + Send + 'a>>;
@@ -18,13 +17,17 @@ pub trait State<E>: Send + Sync {
     fn process_event(&mut self, event: E) -> Result<()>;
 }
 
-pub trait Bot<S, A>: Send + Sync {
-    fn new(states: impl IntoIterator<Item = Arc<RwLock<S>>>) -> Self;
-    fn interval(&self) -> u64;
-    fn evaluate(&self) -> Result<Vec<A>>;
+pub trait Bot<I, A>: Send + Sync {
+    fn interval_ms(&self) -> u64;
+    fn evaluate(&self, input: I) -> Result<Vec<A>>;
 }
 
 #[async_trait::async_trait]
 pub trait Executor<A>: Send + Sync {
     async fn execute(&self, action: A) -> Result<()>;
+}
+
+pub trait Input<S> {
+    fn empty() -> Self;
+    fn read_state(&mut self, state: &S) -> Result<()>;
 }

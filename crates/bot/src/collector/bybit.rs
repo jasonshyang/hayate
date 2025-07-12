@@ -3,13 +3,13 @@ use hayate_core::traits::{Collector, CollectorStream};
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 
-use crate::models::{OrderBookEvent, OrderBookUpdate, OrderEntry, Side};
+use crate::models::{BotEvent, OrderBookEvent, OrderBookUpdate, OrderEntry, Side};
 
 pub struct BybitCollector;
 
 #[async_trait::async_trait]
-impl Collector<OrderBookEvent> for BybitCollector {
-    async fn get_event_stream(&self) -> anyhow::Result<CollectorStream<'_, OrderBookEvent>> {
+impl Collector<BotEvent> for BybitCollector {
+    async fn get_event_stream(&self) -> anyhow::Result<CollectorStream<'_, BotEvent>> {
         let (tx, rx) = mpsc::unbounded_channel::<BybitMessage>();
         let mut client = BybitClient::new(tx);
 
@@ -47,12 +47,13 @@ impl Collector<OrderBookEvent> for BybitCollector {
                         .collect();
 
                     // TODO: handle snapshot and delta separately (perhaps?)
-                    Some(OrderBookEvent::Delta(OrderBookUpdate {
+                    let event = OrderBookEvent::Delta(OrderBookUpdate {
                         symbol: update.data.symbol,
                         updated_at: update.timestamp,
                         bids,
                         asks,
-                    }))
+                    });
+                    Some(BotEvent::OrderBookEvent(event))
                 }
                 _ => None,
             });
