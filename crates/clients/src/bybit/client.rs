@@ -15,6 +15,7 @@ pub struct BybitWsHandler {
     ws_sender: Option<mpsc::UnboundedSender<Message>>,
 }
 
+// TODO: allow subscribing to multiple topics
 impl BybitClient {
     pub fn new(update_sender: mpsc::UnboundedSender<BybitMessage>) -> Self {
         let handler = BybitWsHandler::new(update_sender);

@@ -5,7 +5,11 @@ version.workspace = true
 
 [dependencies]
 hayate-core.workspace = true
+clients.workspace = true
 
 anyhow.workspace = true
+tracing.workspace = true
 serde.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
 async-trait.workspace = true
