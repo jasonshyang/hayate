@@ -50,6 +50,47 @@ impl From<u64> for Decimal {
     }
 }
 
+impl TryFrom<String> for Decimal {
+    type Error = &'static str;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let trimmed = value.trim();
+
+        if trimmed.is_empty() {
+            return Err("Empty string cannot be converted to Decimal");
+        }
+
+        let sign = if trimmed.starts_with('-') { -1 } else { 1 };
+        let unsigned = if sign == -1 { &trimmed[1..] } else { trimmed };
+
+        let parts: Vec<&str> = unsigned.split('.').collect();
+
+        if parts.len() > 2 {
+            return Err("Invalid Decimal format");
+        }
+
+        let integer_part = parts[0]
+            .parse::<u64>()
+            .map_err(|_| "Invalid integer part")?;
+
+        let fractional_part = if parts.len() == 2 {
+            let fraction_str = format!("{:0<width$}", parts[1], width = Decimal::DECIMAL);
+            fraction_str[..Decimal::DECIMAL]
+                .parse::<u64>()
+                .map_err(|_| "Invalid fractional part")?
+        } else {
+            0
+        };
+
+        let raw = integer_part
+            .checked_mul(Decimal::SCALE)
+            .and_then(|v| v.checked_add(fractional_part))
+            .ok_or("Decimal overflow")?;
+
+        Ok(Self { sign, raw })
+    }
+}
+
 impl PartialEq for Decimal {
     fn eq(&self, other: &Self) -> bool {
         self.sign == other.sign && self.raw == other.raw
@@ -187,7 +228,7 @@ impl MulAssign for Decimal {
 impl std::fmt::Display for Decimal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let sign_str = if self.sign < 0 { "-" } else { "" };
-        let raw_str = format!("{:0>7}", self.raw);
+        let raw_str = format!("{:0>width$}", self.raw, width = Self::DECIMAL + 1);
         write!(
             f,
             "{}{}.{}",
@@ -234,6 +275,24 @@ mod decimal_tests {
 
         let d4 = Decimal::from(100u64);
         assert_eq!(d4.to_string(), "100.000000");
+
+        let d5 = Decimal::try_from("123.456789".to_string()).unwrap();
+        assert_eq!(d5.to_string(), "123.456789");
+
+        let d6 = Decimal::try_from("-123.456789".to_string()).unwrap();
+        assert_eq!(d6.to_string(), "-123.456789");
+
+        let d7 = Decimal::try_from("0".to_string()).unwrap();
+        assert_eq!(d7.to_string(), "0.000000");
+
+        let d8 = Decimal::try_from("100.1231234112312456".to_string()).unwrap();
+        assert_eq!(d8.to_string(), "100.123123");
+
+        let d9 = Decimal::try_from("-100.1231234112312456".to_string()).unwrap();
+        assert_eq!(d9.to_string(), "-100.123123");
+
+        let d10 = Decimal::try_from("10012512312312312312.123123".to_string());
+        assert!(d10.is_err(), "Should fail for too large value");
     }
 
     #[test]
