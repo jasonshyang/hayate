@@ -24,17 +24,15 @@ impl State<OrderBookEvent> for OrderBookState {
                 let asks = update.asks;
                 self.inner.add_orders(bids);
                 self.inner.add_orders(asks);
-
-                Ok(())
             }
             OrderBookEvent::Delta(update) => {
                 let bids = update.bids;
                 let asks = update.asks;
                 self.inner.remove_orders(bids)?;
                 self.inner.remove_orders(asks)?;
-
-                Ok(())
             }
         }
+
+        Ok(())
     }
 }
