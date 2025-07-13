@@ -1,8 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::models::Decimal;
-
-use super::Side;
+use crate::models::{Decimal, Side};
 
 #[derive(Debug)]
 pub struct OrderBook {
@@ -57,6 +55,56 @@ impl OrderBook {
         self.asks.len()
     }
 
+    pub fn simulate_buy(
+        &self,
+        price: Decimal,
+        size: Decimal,
+    ) -> (Vec<(Decimal, Decimal)>, Decimal) {
+        let mut fills = Vec::new();
+        let mut remaining_size = size;
+
+        for (opposite_price, opposite_size) in self.asks.range(..=price) {
+            if remaining_size.is_zero() {
+                break;
+            }
+
+            if *opposite_size > remaining_size {
+                fills.push((*opposite_price, remaining_size));
+                remaining_size = Decimal::ZERO;
+            } else {
+                fills.push((*opposite_price, *opposite_size));
+                remaining_size -= *opposite_size;
+            }
+        }
+
+        (fills, remaining_size)
+    }
+
+    pub fn simulate_sell(
+        &self,
+        price: Decimal,
+        size: Decimal,
+    ) -> (Vec<(Decimal, Decimal)>, Decimal) {
+        let mut fills = Vec::new();
+        let mut remaining_size = size;
+
+        for (opposite_price, opposite_size) in self.bids.range(price..).rev() {
+            if remaining_size.is_zero() {
+                break;
+            }
+
+            if *opposite_size > remaining_size {
+                fills.push((*opposite_price, remaining_size));
+                remaining_size = Decimal::ZERO;
+            } else {
+                fills.push((*opposite_price, *opposite_size));
+                remaining_size -= *opposite_size;
+            }
+        }
+
+        (fills, remaining_size)
+    }
+
     pub fn insert(&mut self, side: Side, price: Decimal, size: Decimal) -> anyhow::Result<()> {
         if !size.is_positive() {
             return Err(anyhow::anyhow!("Size {} must be positive", size));
@@ -78,11 +126,10 @@ impl OrderBook {
         };
 
         if removed.is_none() {
-            return Err(anyhow::anyhow!(
-                "Level not found for side: {}, price: {}",
-                side,
-                price
-            ));
+            return Err(anyhow::anyhow!(format!(
+                "Level not found when removing. Price: {}, Side: {}, OrderBook state: {:#?}",
+                price, side, self
+            )));
         }
 
         Ok(())
@@ -111,11 +158,10 @@ impl OrderBook {
                 };
             }
         } else {
-            return Err(anyhow::anyhow!(
-                "Level not found for side: {}, price: {}",
-                side,
-                price
-            ));
+            return Err(anyhow::anyhow!(format!(
+                "Level not found when adjusting. Price: {}, Side: {}, OrderBook state: {:#?}",
+                price, side, self
+            )));
         }
 
         Ok(())
@@ -126,7 +172,7 @@ impl OrderBook {
         self.asks.clear();
     }
 
-    pub fn trim_levels(&mut self) {
+    fn trim_levels(&mut self) {
         while self.bids.len() > self.max_depth {
             let lowest_bid = *self.bids.keys().next().unwrap();
             self.bids.remove(&lowest_bid);
@@ -222,5 +268,59 @@ mod orderbook_tests {
         assert!(orderbook.asks.contains_key(&101.into()));
         assert!(orderbook.asks.contains_key(&102.into()));
         assert!(!orderbook.asks.contains_key(&103.into()));
+    }
+
+    #[test]
+    fn test_simulate_buy() {
+        let mut orderbook = OrderBook::new(5);
+
+        orderbook.insert(Side::Ask, 101.into(), 1.into()).unwrap();
+        orderbook.insert(Side::Ask, 102.into(), 2.into()).unwrap();
+        orderbook.insert(Side::Ask, 103.into(), 3.into()).unwrap();
+        orderbook.insert(Side::Bid, 100.into(), 1.into()).unwrap();
+        orderbook.insert(Side::Bid, 99.into(), 2.into()).unwrap();
+
+        let (fills, remaining_size) = orderbook.simulate_buy(102.into(), 4.into());
+        assert_eq!(fills.len(), 2);
+        assert_eq!(fills[0].0.to_string(), "101.000000");
+        assert_eq!(fills[0].1.to_string(), "1.000000");
+        assert_eq!(fills[1].0.to_string(), "102.000000");
+        assert_eq!(fills[1].1.to_string(), "2.000000");
+        assert_eq!(remaining_size.to_string(), "1.000000");
+
+        let (fills, remaining_size) = orderbook.simulate_buy(100.into(), 4.into());
+        assert_eq!(fills.len(), 0);
+        assert_eq!(remaining_size.to_string(), "4.000000");
+    }
+
+    #[test]
+    fn test_simulate_sell() {
+        let mut orderbook = OrderBook::new(5);
+
+        orderbook.insert(Side::Bid, 100.into(), 1.into()).unwrap();
+        orderbook.insert(Side::Bid, 99.into(), 2.into()).unwrap();
+        orderbook.insert(Side::Bid, 98.into(), 3.into()).unwrap();
+        orderbook.insert(Side::Ask, 101.into(), 1.into()).unwrap();
+        orderbook.insert(Side::Ask, 102.into(), 2.into()).unwrap();
+
+        let (fills, remaining_size) = orderbook.simulate_sell(100.into(), 4.into());
+        assert_eq!(fills.len(), 1);
+        assert_eq!(fills[0].0.to_string(), "100.000000");
+        assert_eq!(fills[0].1.to_string(), "1.000000");
+        assert_eq!(remaining_size.to_string(), "3.000000");
+
+        let (fills, remaining_size) = orderbook.simulate_sell(98.into(), 4.into());
+        assert_eq!(fills.len(), 3);
+        assert_eq!(fills[0].0.to_string(), "100.000000");
+        assert_eq!(fills[0].1.to_string(), "1.000000");
+        assert_eq!(fills[1].0.to_string(), "99.000000");
+        assert_eq!(fills[1].1.to_string(), "2.000000");
+        assert_eq!(fills[2].0.to_string(), "98.000000");
+        assert_eq!(fills[2].1.to_string(), "1.000000");
+        assert_eq!(remaining_size.to_string(), "0.000000");
+
+        let (fills, remaining_size) = orderbook.simulate_sell(102.into(), 4.into());
+        assert_eq!(fills.len(), 0);
+        assert_eq!(remaining_size.to_string(), "4.000000");
     }
 }

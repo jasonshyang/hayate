@@ -30,14 +30,8 @@ impl State<BotEvent> for BotState {
 
     fn process_event(&mut self, event: BotEvent) -> anyhow::Result<()> {
         match self {
-            BotState::OrderBook(state) => match event {
-                BotEvent::OrderBookEvent(order_book_event) => state.process_event(order_book_event),
-                _ => Err(anyhow::anyhow!("Invalid event type for OrderBookState")),
-            },
-            BotState::Position(state) => match event {
-                BotEvent::BotTradeEvent(bot_trade_event) => state.process_event(bot_trade_event),
-                _ => Err(anyhow::anyhow!("Invalid event type for PositionState")),
-            },
+            BotState::OrderBook(state) => state.process_event(event),
+            BotState::Position(state) => state.process_event(event),
         }
     }
 }

@@ -5,6 +5,7 @@ use tokio::{
     task::JoinSet,
 };
 use tokio_stream::StreamExt;
+use tokio_util::sync::CancellationToken;
 
 use crate::traits::{Bot, Collector, Executor, Input, State};
 
@@ -13,6 +14,7 @@ pub fn run_bot<B, S, E, A, I>(
     states: Vec<Arc<RwLock<S>>>,
     collectors: Vec<Box<dyn Collector<E>>>,
     executor: Vec<Box<dyn Executor<A>>>,
+    shutdown: CancellationToken,
 ) -> JoinSet<()>
 where
     B: Bot<I, A> + Send + Sync + 'static,
@@ -31,14 +33,28 @@ where
     // Start the executor
     for exec in executor {
         let mut action_rx = action_tx.subscribe();
+        let shutdown_signal = shutdown.clone();
+
         set.spawn(async move {
             tracing::info!("Starting Executor...");
-            while let Ok(action) = action_rx.recv().await {
-                if let Err(e) = exec.execute(action).await {
-                    tracing::error!("Error executing action: {}", e);
-                    break;
-                } else {
-                    tracing::debug!("Action executed successfully.");
+            loop {
+                tokio::select! {
+                    action = action_rx.recv() => match action {
+                        Ok(action) => {
+                            match exec.execute(action).await {
+                                Ok(_) => tracing::debug!("Action executed successfully."),
+                                Err(e) => tracing::error!("Error executing action: {}", e),
+                            }
+                        }
+                        Err(_) => {
+                            tracing::info!("Action channel closed, stopping executor.");
+                            break;
+                        },
+                    },
+                    _ = shutdown_signal.cancelled() => {
+                        tracing::info!("Shutdown signal received, stopping Executor.");
+                        break;
+                    }
                 }
             }
             tracing::info!("Executor finished.");
@@ -48,6 +64,7 @@ where
     // Start the states
     for state in states {
         let mut event_rx = event_tx.subscribe();
+        let shutdown_signal = shutdown.clone();
 
         set.spawn(async move {
             tracing::info!("Starting State");
@@ -61,9 +78,9 @@ where
                     event = event_rx.recv() => match event {
                         Ok(event) => {
                             let mut state_lock = state.write().await;
-                            if let Err(e) = state_lock.process_event(event.clone()) {
-                                tracing::error!("Error processing event: {}", e);
-                                break;
+                            match state_lock.process_event(event.clone()) {
+                                Ok(_) => tracing::debug!("Event processed successfully in state {}:", state_lock.name()),
+                                Err(e) => tracing::error!("Error processing event in state {}: {}", state_lock.name(), e),
                             }
                             drop(state_lock);
                         }
@@ -72,6 +89,10 @@ where
                             break;
                         },
                     },
+                    _ = shutdown_signal.cancelled() => {
+                        tracing::info!("Shutdown signal received, stopping State.");
+                        break;
+                    }
                 }
             }
             tracing::info!("State finished.");
@@ -79,54 +100,71 @@ where
     }
 
     // Start bot
+    let shutdown_signal = shutdown.clone();
     set.spawn(async move {
         tracing::info!("Starting Bot...");
         let mut interval = tokio::time::interval(Duration::from_millis(bot.interval_ms()));
 
-        loop {
-            interval.tick().await;
+        'bot: loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    let mut input = I::empty();
 
-            let mut input = I::empty();
-
-            // FIXME: distribute the state reading
-            for state in &states_clone {
-                let lock = state.read().await;
-                if let Err(e) = input.read_state(&*lock) {
-                    tracing::error!("Error reading state: {}", e);
-                    continue;
-                }
-                drop(lock);
-            }
-
-            match bot.evaluate(input) {
-                Ok(actions) => {
-                    for action in actions {
-                        if let Err(e) = action_tx.send(action) {
-                            tracing::error!("Error sending action: {}", e);
+                    // FIXME: distribute the state reading
+                    for state in &states_clone {
+                        let lock = state.read().await;
+                        if let Err(e) = input.read_state(&*lock) {
+                            tracing::error!("Error reading state: {}", e);
                             continue;
-                        } else {
-                            tracing::debug!("Action sent successfully.");
+                        }
+                        drop(lock);
+                    }
+
+                    match bot.evaluate(input) {
+                        Ok(actions) => {
+                            for action in actions {
+                                match action_tx.send(action) {
+                                    Ok(_) => tracing::debug!("Action sent successfully."),
+                                    Err(_) => break 'bot,
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Error evaluating bot: {}", e);
+                            continue;
                         }
                     }
                 }
-                Err(e) => {
-                    tracing::error!("Error evaluating bot: {}", e);
-                    continue;
+                _ = shutdown_signal.cancelled() => {
+                    tracing::info!("Shutdown signal received, stopping Bot.");
+                    break;
                 }
             }
         }
+
+        tracing::info!("Bot finished.");
     });
 
     // Start the collectors
     for collector in collectors {
         let sender = event_tx.clone();
+        let shutdown_signal = shutdown.clone();
+
         set.spawn(async move {
             tracing::info!("Starting Collector...");
             let mut event_stream = collector.get_event_stream().await.unwrap();
-            while let Some(event) = event_stream.next().await {
-                match sender.send(event) {
-                    Ok(_) => {}
-                    Err(_) => break,
+            loop {
+                tokio::select! {
+                    Some(event) = event_stream.next() => {
+                        match sender.send(event) {
+                            Ok(_) => {},
+                            Err(_) => break,
+                        }
+                    }
+                    _ = shutdown_signal.cancelled() => {
+                        tracing::info!("Shutdown signal received, stopping Collector.");
+                        break;
+                    }
                 }
             }
             tracing::info!("Collector finished.");

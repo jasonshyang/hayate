@@ -1,7 +1,7 @@
 use crate::models::Order;
 
-#[derive(Debug, Clone)]
-pub enum BotAction {
+pub enum PaperExchangeMessage {
     PlaceOrder(Order),
     CancelOrder(Order),
+    Close,
 }
