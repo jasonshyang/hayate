@@ -1,4 +1,4 @@
-use crate::models::{Decimal, OrderEntry, Side};
+use crate::models::{Decimal, OrderData, Side};
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct Position {
@@ -10,7 +10,7 @@ pub struct Position {
 }
 
 impl Position {
-    pub fn new(order: OrderEntry, timestamp: u64) -> Self {
+    pub fn new(order: OrderData, timestamp: u64) -> Self {
         Self {
             side: order.side,
             size: order.size,
@@ -20,7 +20,7 @@ impl Position {
         }
     }
 
-    pub fn update(&mut self, order: OrderEntry, timestamp: u64) {
+    pub fn update(&mut self, order: OrderData, timestamp: u64) {
         if !self.is_open() {
             *self = Position::new(order, timestamp);
             return;
@@ -87,7 +87,7 @@ mod position_tests {
 
     #[test]
     fn test_position_creation() {
-        let order = OrderEntry::try_new(Side::Bid, 100, 1.5).unwrap();
+        let order = OrderData::try_new(Side::Bid, 100, 1.5).unwrap();
         let position = Position::new(order, 1622547800);
         assert_eq!(position.side, Side::Bid);
         assert_eq!(position.entry_price.to_string(), "100.000000");
@@ -97,10 +97,10 @@ mod position_tests {
 
     #[test]
     fn test_position_add() {
-        let order = OrderEntry::try_new(Side::Bid, 100, 1.5).unwrap();
+        let order = OrderData::try_new(Side::Bid, 100, 1.5).unwrap();
         let mut position = Position::new(order, 1622547800);
 
-        let add_order = OrderEntry::try_new(Side::Bid, 105, 0.5).unwrap();
+        let add_order = OrderData::try_new(Side::Bid, 105, 0.5).unwrap();
         position.update(add_order, 1622547801);
 
         assert_eq!(position.size.to_string(), "2.000000");
@@ -111,10 +111,10 @@ mod position_tests {
 
     #[test]
     fn test_position_partial_reduce() {
-        let order = OrderEntry::try_new(Side::Bid, 100, 2.0).unwrap();
+        let order = OrderData::try_new(Side::Bid, 100, 2.0).unwrap();
         let mut position = Position::new(order, 1622547800);
 
-        let reduce_order = OrderEntry::try_new(Side::Ask, 105, 1.0).unwrap();
+        let reduce_order = OrderData::try_new(Side::Ask, 105, 1.0).unwrap();
         position.update(reduce_order, 1622547801);
 
         assert_eq!(position.size.to_string(), "1.000000");
@@ -124,10 +124,10 @@ mod position_tests {
 
     #[test]
     fn test_position_full_reduce() {
-        let order = OrderEntry::try_new(Side::Bid, 100, 2.0).unwrap();
+        let order = OrderData::try_new(Side::Bid, 100, 2.0).unwrap();
         let mut position = Position::new(order, 1622547800);
 
-        let reduce_order = OrderEntry::try_new(Side::Ask, 105, 2.0).unwrap();
+        let reduce_order = OrderData::try_new(Side::Ask, 105, 2.0).unwrap();
         position.update(reduce_order, 1622547801);
 
         assert_eq!(position.size.to_string(), "0.000000");
@@ -138,10 +138,10 @@ mod position_tests {
 
     #[test]
     fn test_position_flip() {
-        let order = OrderEntry::try_new(Side::Bid, 100, 2.0).unwrap();
+        let order = OrderData::try_new(Side::Bid, 100, 2.0).unwrap();
         let mut position = Position::new(order, 1622547800);
 
-        let flip_order = OrderEntry::try_new(Side::Ask, 110, 3.0).unwrap();
+        let flip_order = OrderData::try_new(Side::Ask, 110, 3.0).unwrap();
         position.update(flip_order, 1622547801);
 
         assert_eq!(position.side, Side::Ask);
@@ -152,7 +152,7 @@ mod position_tests {
 
     #[test]
     fn test_position_unrealized_pnl() {
-        let order = OrderEntry::try_new(Side::Bid, 100, 2.0).unwrap();
+        let order = OrderData::try_new(Side::Bid, 100, 2.0).unwrap();
         let mut position = Position::new(order, 1622547800);
         let pnl = position.unrealized_pnl(110.into());
         assert_eq!(pnl.to_string(), "20.000000"); // (110 - 100) * 2.0 = 20.0

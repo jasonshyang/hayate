@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bot::{
-    collector::bybit::BybitCollector,
+    collector::bybit_collector::BybitCollector,
     core::simple_market_making::SMM,
     executor::paper_executor::PaperExecutor,
     models::{BotAction, Decimal},
@@ -39,10 +39,20 @@ async fn main() {
         while let Some(action) = action_rx.recv().await {
             match action {
                 BotAction::PlaceOrder(place_order) => {
-                    println!("Placing order: {:?}", place_order);
+                    tracing::info!(
+                        "Placing order: symbol={}, price={}, size={}, side={}",
+                        place_order.symbol,
+                        place_order.price,
+                        place_order.size,
+                        place_order.side
+                    );
                 }
                 BotAction::CancelOrder(cancel_order) => {
-                    println!("Cancelling order: {:?}", cancel_order);
+                    tracing::info!(
+                        "Cancelling order: symbol={}, order_id={}",
+                        cancel_order.symbol,
+                        cancel_order.order_id
+                    );
                 }
             }
         }

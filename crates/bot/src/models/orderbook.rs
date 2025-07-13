@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::models::{Decimal, OrderEntry};
+use crate::models::Decimal;
 
 use super::Side;
 
@@ -57,127 +57,81 @@ impl OrderBook {
         self.asks.len()
     }
 
-    pub fn add_order(&mut self, order: OrderEntry) {
-        match order.side {
-            Side::Bid => self.add_bid(order.price, order.size),
-            Side::Ask => self.add_ask(order.price, order.size),
+    pub fn insert(&mut self, side: Side, price: Decimal, size: Decimal) -> anyhow::Result<()> {
+        if !size.is_positive() {
+            return Err(anyhow::anyhow!("Size {} must be positive", size));
         }
-    }
 
-    pub fn add_orders(&mut self, orders: Vec<OrderEntry>) {
-        for order in orders {
-            self.add_order(order);
-        }
-    }
+        match side {
+            Side::Bid => self.bids.insert(price, size),
+            Side::Ask => self.asks.insert(price, size),
+        };
 
-    pub fn remove_order(&mut self, order: OrderEntry) -> anyhow::Result<()> {
-        match order.side {
-            Side::Bid => self.remove_bid(order.price, order.size),
-            Side::Ask => self.remove_ask(order.price, order.size),
-        }
-    }
-
-    pub fn remove_orders(&mut self, orders: Vec<OrderEntry>) -> anyhow::Result<()> {
-        for order in orders {
-            self.remove_order(order)?;
-        }
+        self.trim_levels();
         Ok(())
     }
 
-    pub fn add_bid(&mut self, price: Decimal, size: Decimal) {
-        self.bids
-            .entry(price)
-            .and_modify(|existing_size| *existing_size += size)
-            .or_insert(size);
+    pub fn remove(&mut self, side: Side, price: Decimal) -> anyhow::Result<()> {
+        let removed = match side {
+            Side::Bid => self.bids.remove(&price),
+            Side::Ask => self.asks.remove(&price),
+        };
 
-        self.trim_bids();
+        if removed.is_none() {
+            return Err(anyhow::anyhow!(
+                "Level not found for side: {}, price: {}",
+                side,
+                price
+            ));
+        }
+
+        Ok(())
     }
 
-    pub fn add_ask(&mut self, price: Decimal, size: Decimal) {
-        self.asks
-            .entry(price)
-            .and_modify(|existing_size| *existing_size += size)
-            .or_insert(size);
+    pub fn adjust(&mut self, side: Side, price: Decimal, delta: Decimal) -> anyhow::Result<()> {
+        let current_size = match side {
+            Side::Bid => self.bids.get_mut(&price),
+            Side::Ask => self.asks.get_mut(&price),
+        };
 
-        self.trim_asks();
-    }
-
-    pub fn remove_bid(&mut self, price: Decimal, size: Decimal) -> anyhow::Result<()> {
-        match self.bids.get_mut(&price) {
-            Some(existing_size) => {
-                if *existing_size < size {
-                    return Err(anyhow::anyhow!("Size to remove exceeds existing size"));
-                }
-
-                *existing_size -= size;
-
-                if *existing_size == Decimal::ZERO {
-                    self.bids.remove(&price);
-                }
-
-                Ok(())
+        if let Some(size) = current_size {
+            if *size + delta < Decimal::ZERO {
+                return Err(anyhow::anyhow!(
+                    "Cannot reduce size below zero, current size: {}, delta: {}",
+                    size,
+                    delta
+                ));
             }
-            None => Err(anyhow::anyhow!("Bid not found for price: {}", price)),
-        }
-    }
+            *size += delta;
 
-    pub fn remove_ask(&mut self, price: Decimal, size: Decimal) -> anyhow::Result<()> {
-        match self.asks.get_mut(&price) {
-            Some(existing_size) => {
-                if *existing_size < size {
-                    return Err(anyhow::anyhow!("Size to remove exceeds existing size"));
-                }
-
-                *existing_size -= size;
-
-                if *existing_size == Decimal::ZERO {
-                    self.asks.remove(&price);
-                }
-
-                Ok(())
+            if size.is_zero() {
+                match side {
+                    Side::Bid => self.bids.remove(&price),
+                    Side::Ask => self.asks.remove(&price),
+                };
             }
-            None => Err(anyhow::anyhow!("Ask not found for price: {}", price)),
+        } else {
+            return Err(anyhow::anyhow!(
+                "Level not found for side: {}, price: {}",
+                side,
+                price
+            ));
         }
-    }
-
-    pub fn add_bids(&mut self, bids: Vec<(Decimal, Decimal)>) {
-        for (price, size) in bids {
-            self.add_bid(price, size);
-        }
-    }
-
-    pub fn add_asks(&mut self, asks: Vec<(Decimal, Decimal)>) {
-        for (price, size) in asks {
-            self.add_ask(price, size);
-        }
-    }
-
-    pub fn remove_bids(&mut self, bids: Vec<(Decimal, Decimal)>) -> anyhow::Result<()> {
-        for (price, size) in bids {
-            self.remove_bid(price, size)?;
-        }
-        self.trim_bids();
 
         Ok(())
     }
 
-    pub fn remove_asks(&mut self, asks: Vec<(Decimal, Decimal)>) -> anyhow::Result<()> {
-        for (price, size) in asks {
-            self.remove_ask(price, size)?;
-        }
-        self.trim_asks();
-
-        Ok(())
+    pub fn reset(&mut self) {
+        self.bids.clear();
+        self.asks.clear();
     }
 
-    fn trim_bids(&mut self) {
+    pub fn trim_levels(&mut self) {
         while self.bids.len() > self.max_depth {
             let lowest_bid = *self.bids.keys().next().unwrap();
             self.bids.remove(&lowest_bid);
         }
-    }
 
-    fn trim_asks(&mut self) {
         while self.asks.len() > self.max_depth {
             let highest_ask = *self.asks.keys().next_back().unwrap();
             self.asks.remove(&highest_ask);
@@ -190,81 +144,83 @@ mod orderbook_tests {
     use super::*;
 
     #[test]
-    fn test_orderbook() {
+    fn test_insert_and_remove() {
         let mut orderbook = OrderBook::new(5);
 
-        orderbook.add_orders(vec![
-            OrderEntry::try_new(Side::Bid, 100, 1.0).unwrap(),
-            OrderEntry::try_new(Side::Bid, 99, 2.0).unwrap(),
-            OrderEntry::try_new(Side::Bid, 98, 3.0).unwrap(),
-        ]);
-        orderbook.add_orders(vec![
-            OrderEntry::try_new(Side::Ask, 101, 1.0).unwrap(),
-            OrderEntry::try_new(Side::Ask, 102, 2.0).unwrap(),
-            OrderEntry::try_new(Side::Ask, 109, 3.0).unwrap(),
-        ]);
+        orderbook.insert(Side::Bid, 100.into(), 1.into()).unwrap();
+        orderbook.insert(Side::Bid, 99.into(), 2.into()).unwrap();
+        orderbook.insert(Side::Bid, 98.into(), 3.into()).unwrap();
+
+        orderbook.insert(Side::Ask, 101.into(), 1.into()).unwrap();
+        orderbook.insert(Side::Ask, 102.into(), 2.into()).unwrap();
+        orderbook.insert(Side::Ask, 103.into(), 3.into()).unwrap();
+
         assert_eq!(orderbook.best_bid(), Some(100.into()));
         assert_eq!(orderbook.best_ask(), Some(101.into()));
 
-        // Expect to drop the lowest bids (93, 94, 95)
-        orderbook.add_orders(vec![
-            OrderEntry::try_new(Side::Bid, 97, 1.0).unwrap(),
-            OrderEntry::try_new(Side::Bid, 96, 2.0).unwrap(),
-            OrderEntry::try_new(Side::Bid, 95, 3.0).unwrap(),
-            OrderEntry::try_new(Side::Bid, 94, 4.0).unwrap(),
-            OrderEntry::try_new(Side::Bid, 93, 5.0).unwrap(),
-        ]);
-        assert_eq!(orderbook.best_bid(), Some(100.into()));
-        assert_eq!(orderbook.bids_depth(), 5);
-        assert_eq!(orderbook.bids.keys().next(), Some(&96.into()));
-
-        // Expect to drop the highest asks (107, 108, 109)
-        orderbook.add_orders(vec![
-            OrderEntry::try_new(Side::Ask, 99, 1.0).unwrap(),
-            OrderEntry::try_new(Side::Ask, 105, 2.0).unwrap(),
-            OrderEntry::try_new(Side::Ask, 106, 3.0).unwrap(),
-            OrderEntry::try_new(Side::Ask, 107, 4.0).unwrap(),
-            OrderEntry::try_new(Side::Ask, 108, 5.0).unwrap(),
-        ]);
-        assert_eq!(orderbook.best_ask(), Some(99.into()));
-        assert_eq!(orderbook.asks_depth(), 5);
-        assert_eq!(orderbook.asks.keys().next_back(), Some(&106.into()));
-
-        // Remove some bids and asks
-        orderbook
-            .remove_orders(vec![
-                OrderEntry::try_new(Side::Bid, 100, 0.5).unwrap(),
-                OrderEntry::try_new(Side::Bid, 99, 1.0).unwrap(),
-            ])
-            .unwrap();
-        assert_eq!(orderbook.best_bid(), Some(100.into()));
-        assert_eq!(orderbook.bids_depth(), 5);
-
-        orderbook
-            .remove_orders(vec![
-                OrderEntry::try_new(Side::Bid, 100, 0.5).unwrap(),
-                OrderEntry::try_new(Side::Bid, 99, 0.5).unwrap(),
-            ])
-            .unwrap();
+        orderbook.remove(Side::Bid, 100.into()).unwrap();
         assert_eq!(orderbook.best_bid(), Some(99.into()));
-        assert_eq!(orderbook.bids_depth(), 4);
+
+        orderbook.remove(Side::Ask, 101.into()).unwrap();
+        orderbook.remove(Side::Ask, 102.into()).unwrap();
+        assert_eq!(orderbook.best_ask(), Some(103.into()));
+
+        orderbook.remove(Side::Ask, 103.into()).unwrap();
+        assert!(orderbook.best_ask().is_none());
+    }
+
+    #[test]
+    fn test_adjust() {
+        let mut orderbook = OrderBook::new(5);
+
+        orderbook.insert(Side::Bid, 100.into(), 1.into()).unwrap();
+        orderbook.insert(Side::Bid, 99.into(), 2.into()).unwrap();
+
+        orderbook.insert(Side::Ask, 101.into(), 3.into()).unwrap();
+        orderbook.insert(Side::Ask, 102.into(), 2.into()).unwrap();
 
         orderbook
-            .remove_orders(vec![
-                OrderEntry::try_new(Side::Ask, 101, 0.5).unwrap(),
-                OrderEntry::try_new(Side::Ask, 102, 1.0).unwrap(),
-            ])
+            .adjust(Side::Bid, 100.into(), Decimal::from_f64_unchecked(0.5))
             .unwrap();
-        assert_eq!(orderbook.best_ask(), Some(99.into()));
-        assert_eq!(orderbook.asks_depth(), 5);
+        assert_eq!(
+            orderbook.bids.get(&100.into()),
+            Some(&Decimal::from_f64_unchecked(1.5))
+        );
 
         orderbook
-            .remove_orders(vec![
-                OrderEntry::try_new(Side::Ask, 99, 1.0).unwrap(),
-                OrderEntry::try_new(Side::Ask, 105, 0.5).unwrap(),
-            ])
+            .adjust(Side::Ask, 101.into(), Decimal::from_f64_unchecked(-0.5))
             .unwrap();
-        assert_eq!(orderbook.best_ask(), Some(101.into()));
-        assert_eq!(orderbook.asks_depth(), 4);
+        assert_eq!(
+            orderbook.asks.get(&101.into()),
+            Some(&Decimal::from_f64_unchecked(2.5))
+        );
+
+        orderbook
+            .adjust(Side::Bid, 99.into(), Decimal::from_f64_unchecked(-2.0))
+            .unwrap();
+        assert!(orderbook.bids.get(&99.into()).is_none());
+    }
+
+    #[test]
+    fn test_trim() {
+        let mut orderbook = OrderBook::new(2);
+
+        orderbook.insert(Side::Bid, 100.into(), 1.into()).unwrap();
+        orderbook.insert(Side::Bid, 98.into(), 3.into()).unwrap();
+        orderbook.insert(Side::Bid, 99.into(), 2.into()).unwrap(); // This should trigger trim
+
+        assert_eq!(orderbook.bids_depth(), 2);
+        assert!(orderbook.bids.contains_key(&99.into()));
+        assert!(orderbook.bids.contains_key(&100.into()));
+        assert!(!orderbook.bids.contains_key(&98.into()));
+
+        orderbook.insert(Side::Ask, 101.into(), 1.into()).unwrap();
+        orderbook.insert(Side::Ask, 103.into(), 3.into()).unwrap();
+        orderbook.insert(Side::Ask, 102.into(), 2.into()).unwrap(); // This should trigger trim
+
+        assert_eq!(orderbook.asks_depth(), 2);
+        assert!(orderbook.asks.contains_key(&101.into()));
+        assert!(orderbook.asks.contains_key(&102.into()));
+        assert!(!orderbook.asks.contains_key(&103.into()));
     }
 }
