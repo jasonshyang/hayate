@@ -2,6 +2,21 @@
 
 **Hayate** (疾風) is an algorithmic trading bot framework built in Rust, providing a clean architecture for building trading bots with real-time market data processing, state management, and execution capabilities.
 
+## Development Status
+
+Hayate is currently in active development. Core features are functional but the API may change.
+
+**Current Status**:
+- ✅ Core framework architecture
+- ✅ Bybit integration
+- ✅ OrderBook and Position state management  
+- ✅ Simple market making strategy
+- ✅ Paper trade simulator
+- 🚧 Additional state management
+- 🚧 Multiple trading pairs
+- 🚧 Additional exchange integrations
+- 🚧 Advanced trading strategies
+
 ## Architecture Overview
 
 ```
@@ -59,10 +74,10 @@ The bot crate includes a comprehensive paper trading system for testing and vali
 
 The paper exchange acts as a proxy, taking real market data from any source collector that implements `Collector<BotEvent>` and simulating trade execution against that live data. This allows you to:
 
-✅ **Test strategies** with real market conditions without risking capital  
-✅ **Validate bot logic** before deploying to live trading  
-✅ **Analyze performance** with detailed trade simulation and P&L tracking  
-✅ **Switch data sources** easily by plugging in different collectors
+- **Test strategies** with real market conditions without risking capital  
+- **Validate bot logic** before deploying to live trading  
+- **Analyze performance** with detailed trade simulation and P&L tracking  
+- **Switch data sources** easily by plugging in different collectors
 
 ### 🔗 `clients`
 Exchange-specific client implementations for connecting to trading platforms. Currently supports Bybit WebSocket API with plans for additional exchanges.
@@ -80,17 +95,3 @@ cargo run --bin bot
 # Run with logs
 RUST_LOG=info cargo run --bin bot
 ```
-
-## Development Status
-
-Hayate is currently in active development. Core features are functional but the API may change.
-
-**Current Status**:
-- ✅ Core framework architecture
-- ✅ Bybit integration
-- ✅ OrderBook and Position state management  
-- ✅ Simple market making strategy
-- ✅ Paper trade simulator
-- 🚧 Multiple trading pairs
-- 🚧 Additional exchange integrations
-- 🚧 Advanced trading strategies
