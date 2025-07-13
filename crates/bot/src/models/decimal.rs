@@ -1,6 +1,6 @@
 use std::{
     hash::Hash,
-    ops::{Add, AddAssign, Div, Mul, MulAssign, Sub, SubAssign},
+    ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign},
     str::FromStr,
 };
 
@@ -29,11 +29,11 @@ impl Decimal {
     }
 
     pub fn is_positive(&self) -> bool {
-        self.sign > 0
+        self.sign > 0 && !self.is_zero()
     }
 
     pub fn is_negative(&self) -> bool {
-        self.sign < 0
+        self.sign < 0 && !self.is_zero()
     }
 }
 
@@ -232,6 +232,20 @@ impl Mul for Decimal {
         Self {
             sign,
             raw: raw as u64,
+        }
+    }
+}
+
+impl Neg for Decimal {
+    type Output = Self;
+
+    fn neg(self) -> Self {
+        if self.is_zero() {
+            return Self::ZERO;
+        }
+        Self {
+            sign: -self.sign,
+            raw: self.raw,
         }
     }
 }

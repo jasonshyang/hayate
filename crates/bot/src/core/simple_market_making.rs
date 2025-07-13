@@ -1,7 +1,7 @@
 use hayate_core::traits::{Bot, Input};
 
 use crate::{
-    models::{BotAction, Decimal, PlaceOrder, Side},
+    models::{BotAction, Decimal, Order, Side},
     state::BotState,
 };
 
@@ -23,7 +23,10 @@ impl Input<BotState> for SMMInput {
                     return Err(anyhow::anyhow!("Mid price not available in OrderBookState"));
                 }
             }
-            _ => return Err(anyhow::anyhow!("Invalid state type for SMMInput")),
+            BotState::Position(position) => {
+                // TODO: budget check
+                tracing::debug!("Reading position state: {:?}", position.get_inner());
+            }
         }
         Ok(())
     }
@@ -61,14 +64,14 @@ impl Bot<SMMInput, BotAction> for SMM {
             ask_price
         );
 
-        actions.push(BotAction::PlaceOrder(PlaceOrder {
+        actions.push(BotAction::PlaceOrder(Order {
             symbol: self.symbol.clone(),
             price: bid_price,
             size: self.order_amount,
             side: Side::Bid,
         }));
 
-        actions.push(BotAction::PlaceOrder(PlaceOrder {
+        actions.push(BotAction::PlaceOrder(Order {
             symbol: self.symbol.clone(),
             price: ask_price,
             size: self.order_amount,

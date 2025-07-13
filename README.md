@@ -44,11 +44,25 @@ The core crate containing traits with a `run_bot` function to orchestrate the en
 
 ### 🤖 `bot`
 Contains bot implementations, trading models, and business logic. Includes:
-- **Collectors**: Data ingestion from exchanges (e.g., `BybitCollector`)
-- **States**: State management (e.g., `OrderBookState`, `PositionState`)  
-- **Core**: Trading strategies (e.g., `SimpleMarketMaking`)
-- **Executors**: Trade execution (e.g., `PaperExecutor`)
+- **Collectors**: Data ingestion from exchanges (e.g. `BybitCollector`)
+- **States**: State management (e.g. `OrderBookState`, `PositionState`)  
+- **Core**: Trading strategies (e.g. `SimpleMarketMaking`)
+- **Executors**: Trade execution
 - **Models**: Data structures and types used throughout the system
+
+#### 📄 Paper Trading
+The bot crate includes a comprehensive paper trading system for testing and validation:
+
+- **`PaperExchange`**: Simulates a real exchange environment with order matching and fills
+- **`PaperCollector`**: Collects events from the paper exchange for bot consumption  
+- **`PaperExecutor`**: Executes bot actions within the simulated environment
+
+The paper exchange acts as a proxy, taking real market data from any source collector that implements `Collector<BotEvent>` and simulating trade execution against that live data. This allows you to:
+
+✅ **Test strategies** with real market conditions without risking capital  
+✅ **Validate bot logic** before deploying to live trading  
+✅ **Analyze performance** with detailed trade simulation and P&L tracking  
+✅ **Switch data sources** easily by plugging in different collectors
 
 ### 🔗 `clients`
 Exchange-specific client implementations for connecting to trading platforms. Currently supports Bybit WebSocket API with plans for additional exchanges.
@@ -76,6 +90,7 @@ Hayate is currently in active development. Core features are functional but the 
 - ✅ Bybit integration
 - ✅ OrderBook and Position state management  
 - ✅ Simple market making strategy
-- 🚧 Paper trade simulator
+- ✅ Paper trade simulator
+- 🚧 Multiple trading pairs
 - 🚧 Additional exchange integrations
 - 🚧 Advanced trading strategies
