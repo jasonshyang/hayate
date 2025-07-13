@@ -1,6 +1,6 @@
 use hayate_core::traits::State;
 
-use crate::models::{Decimal, OrderBook, OrderBookEvent};
+use crate::models::{Decimal, OrderBook, OrderBookEvent, Side};
 
 pub struct OrderBookState {
     inner: OrderBook,
@@ -20,16 +20,38 @@ impl State<OrderBookEvent> for OrderBookState {
     fn process_event(&mut self, event: OrderBookEvent) -> anyhow::Result<()> {
         match event {
             OrderBookEvent::Snapshot(update) => {
+                self.inner.reset();
+
                 let bids = update.bids;
                 let asks = update.asks;
-                self.inner.add_orders(bids);
-                self.inner.add_orders(asks);
+
+                for (price, size) in bids {
+                    self.inner.insert(Side::Bid, price, size)?;
+                }
+
+                for (price, size) in asks {
+                    self.inner.insert(Side::Bid, price, size)?;
+                }
             }
             OrderBookEvent::Delta(update) => {
                 let bids = update.bids;
                 let asks = update.asks;
-                self.inner.add_orders(bids);
-                self.inner.add_orders(asks);
+
+                for (price, size) in bids {
+                    if size.is_zero() {
+                        self.inner.remove(Side::Bid, price)?;
+                    } else {
+                        self.inner.insert(Side::Bid, price, size)?;
+                    }
+                }
+
+                for (price, size) in asks {
+                    if size.is_zero() {
+                        self.inner.remove(Side::Ask, price)?;
+                    } else {
+                        self.inner.insert(Side::Ask, price, size)?;
+                    }
+                }
             }
         }
 

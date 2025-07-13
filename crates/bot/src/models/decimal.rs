@@ -1,6 +1,7 @@
 use std::{
     hash::Hash,
     ops::{Add, AddAssign, Div, Mul, MulAssign, Sub, SubAssign},
+    str::FromStr,
 };
 
 #[derive(Clone, Copy)]
@@ -14,6 +15,34 @@ impl Decimal {
     pub const SCALE: u64 = 10u64.pow(Self::DECIMAL as u32);
     pub const ZERO: Self = Self { sign: 1, raw: 0 };
     pub const MAX: u64 = u64::MAX / Self::SCALE;
+
+    pub fn from_str_unchecked(value: &str) -> Self {
+        Decimal::from_str(value).unwrap()
+    }
+
+    pub fn from_f64_unchecked(value: f64) -> Self {
+        Decimal::try_from(value).unwrap()
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.raw == 0
+    }
+
+    pub fn is_positive(&self) -> bool {
+        self.sign > 0
+    }
+
+    pub fn is_negative(&self) -> bool {
+        self.sign < 0
+    }
+}
+
+impl FromStr for Decimal {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Decimal::try_from(s.to_string())
+    }
 }
 
 impl TryFrom<f64> for Decimal {

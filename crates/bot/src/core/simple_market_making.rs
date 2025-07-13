@@ -54,6 +54,13 @@ impl Bot<SMMInput, BotAction> for SMM {
         let bid_price = mid_price - bid_spread;
         let ask_price = mid_price + ask_spread;
 
+        tracing::debug!(
+            "Current mid price: {}, placing orders at bid: {}, ask: {}",
+            mid_price,
+            bid_price,
+            ask_price
+        );
+
         actions.push(BotAction::PlaceOrder(PlaceOrder {
             symbol: self.symbol.clone(),
             price: bid_price,
@@ -67,6 +74,8 @@ impl Bot<SMMInput, BotAction> for SMM {
             size: self.order_amount,
             side: Side::Ask,
         }));
+
+        // TODO: implement order cancellation
 
         Ok(actions)
     }

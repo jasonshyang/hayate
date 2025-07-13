@@ -1,4 +1,4 @@
-use crate::models::{Decimal, OrderEntry, Side};
+use crate::models::{Decimal, OrderData, Side};
 
 #[derive(Debug, Clone)]
 pub enum BotEvent {
@@ -16,8 +16,8 @@ pub enum OrderBookEvent {
 pub struct OrderBookUpdate {
     pub symbol: String,
     pub updated_at: u64,
-    pub bids: Vec<OrderEntry>,
-    pub asks: Vec<OrderEntry>,
+    pub bids: Vec<(Decimal, Decimal)>,
+    pub asks: Vec<(Decimal, Decimal)>,
 }
 
 #[derive(Debug, Clone)]
@@ -37,8 +37,8 @@ pub struct TradeExecuted {
     pub timestamp: u64,
 }
 
-impl From<TradeExecuted> for OrderEntry {
+impl From<TradeExecuted> for OrderData {
     fn from(event: TradeExecuted) -> Self {
-        OrderEntry::new(event.side, event.price, event.size)
+        OrderData::new(event.side, event.price, event.size)
     }
 }

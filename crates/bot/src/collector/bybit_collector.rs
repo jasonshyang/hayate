@@ -3,7 +3,7 @@ use hayate_core::traits::{Collector, CollectorStream};
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 
-use crate::models::{BotEvent, OrderBookEvent, OrderBookUpdate, OrderEntry, Side};
+use crate::models::{BotEvent, OrderBookEvent, OrderBookUpdate};
 
 pub struct BybitCollector;
 
@@ -22,27 +22,29 @@ impl Collector<BotEvent> for BybitCollector {
         let stream =
             tokio_stream::wrappers::UnboundedReceiverStream::new(rx).filter_map(|msg| match msg {
                 BybitMessage::OrderBookUpdate(update) => {
-                    let bids: Vec<OrderEntry> = update
+                    let bids = update
                         .data
                         .bids
                         .into_iter()
                         .filter_map(|mut entry| {
                             // [price, size]
-                            let size = entry.pop()?;
-                            let price = entry.pop()?;
-                            OrderEntry::try_new(Side::Bid, price, size).ok()
+                            let size = entry.pop()?.try_into().ok()?;
+                            let price = entry.pop()?.try_into().ok()?;
+
+                            Some((price, size))
                         })
                         .collect();
 
-                    let asks: Vec<OrderEntry> = update
+                    let asks = update
                         .data
                         .asks
                         .into_iter()
                         .filter_map(|mut entry| {
                             // [price, size]
-                            let size = entry.pop()?;
-                            let price = entry.pop()?;
-                            OrderEntry::try_new(Side::Ask, price, size).ok()
+                            let size = entry.pop()?.try_into().ok()?;
+                            let price = entry.pop()?.try_into().ok()?;
+
+                            Some((price, size))
                         })
                         .collect();
 
