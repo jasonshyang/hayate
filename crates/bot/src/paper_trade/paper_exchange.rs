@@ -1,13 +1,11 @@
-use std::collections::BTreeMap;
-
 use hayate_core::traits::{Collector, State};
 use tokio::sync::{broadcast, mpsc};
 use tokio_stream::StreamExt;
 
 use crate::{
-    models::{BotEvent, Decimal, Fill, Side},
+    models::{Fill, InternalEvent, Order, PlaceOrder, Side},
     paper_trade::types::PaperExchangeMessage,
-    state::{OrderBookState, PositionState},
+    state::{OrderBookState, PendingOrdersState, PositionState},
 };
 
 /// PaperExchange simulates an exchange for paper trading.
@@ -17,12 +15,11 @@ use crate::{
 #[derive(Debug)]
 pub struct PaperExchange {
     /// Channel for broadcasting events internally
-    broadcaster: broadcast::Sender<BotEvent>,
-    /// Queue for unfilled bot orders
-    pending_bot_bids: BTreeMap<Decimal, Decimal>,
-    pending_bot_asks: BTreeMap<Decimal, Decimal>,
-    orderbook: OrderBookState, // TODO: have different book for each symbol
+    broadcaster: broadcast::Sender<InternalEvent>,
+    orderbook: OrderBookState,
     bot_position: PositionState,
+    pending_orders: PendingOrdersState,
+    next_oid: usize, // Order ID counter
 }
 
 impl PaperExchange {
@@ -31,20 +28,20 @@ impl PaperExchange {
 
         Self {
             broadcaster,
-            pending_bot_bids: BTreeMap::new(),
-            pending_bot_asks: BTreeMap::new(),
             orderbook: OrderBookState::new(1024), // TODO: remove hardcode
             bot_position: PositionState::new(),
+            pending_orders: PendingOrdersState::new(),
+            next_oid: 1,
         }
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<BotEvent> {
+    pub fn subscribe(&self) -> broadcast::Receiver<InternalEvent> {
         self.broadcaster.subscribe()
     }
 
     pub async fn run(
         &mut self,
-        collector: impl Collector<BotEvent>,
+        collector: impl Collector<InternalEvent>,
         mut msg_rx: mpsc::UnboundedReceiver<PaperExchangeMessage>,
     ) -> anyhow::Result<()> {
         let mut source_stream = collector.get_event_stream().await?;
@@ -63,7 +60,7 @@ impl PaperExchange {
 
     pub async fn run_with_shutdown(
         &mut self,
-        collector: impl Collector<BotEvent>,
+        collector: impl Collector<InternalEvent>,
         mut msg_rx: mpsc::UnboundedReceiver<PaperExchangeMessage>,
         shutdown: tokio_util::sync::CancellationToken,
     ) -> anyhow::Result<()> {
@@ -90,17 +87,16 @@ impl PaperExchange {
         Ok(())
     }
 
-    fn process_event(&mut self, event: BotEvent) -> anyhow::Result<()> {
+    fn process_event(&mut self, event: InternalEvent) -> anyhow::Result<()> {
         self.orderbook.process_event(event.clone())?;
         self.broadcaster.send(event)?;
 
-        if self.is_pending_order_fillable() {
-            let fills = self.fill_pending_orders();
-            for fill in fills {
-                self.bot_position
-                    .process_event(BotEvent::OrderFilled(fill.clone()))?;
-                self.broadcaster.send(BotEvent::OrderFilled(fill))?;
-            }
+        let fills = self.fill_pending_orders();
+        for fill in fills {
+            let fill_event = InternalEvent::OrderFilled(fill);
+            self.bot_position.process_event(fill_event.clone())?;
+            self.pending_orders.process_event(fill_event.clone())?;
+            self.broadcaster.send(fill_event)?;
         }
 
         Ok(())
@@ -108,32 +104,21 @@ impl PaperExchange {
 
     fn process_msg(&mut self, msg: PaperExchangeMessage) -> anyhow::Result<()> {
         match msg {
-            PaperExchangeMessage::PlaceOrder(order) => {
-                tracing::info!("Bot order received: {:?}", order);
-                let side = order.side;
-                let price = order.price;
-                let size = order.size;
-
-                let (fills, remaining) = self.fill_order(
-                    side, price, size, false, // because we are immediately filling the order
-                );
-
-                if remaining.is_positive() {
-                    // If there are unfilled orders, we add them to the bot pending orders
-                    match side {
-                        Side::Bid => self.pending_bot_bids.insert(price, size),
-                        Side::Ask => self.pending_bot_asks.insert(price, size),
-                    };
-                }
-
-                for fill in fills {
-                    self.bot_position
-                        .process_event(BotEvent::OrderFilled(fill.clone()))?;
-                    self.broadcaster.send(BotEvent::OrderFilled(fill))?;
-                }
+            PaperExchangeMessage::PlaceOrder(action) => {
+                tracing::info!("Bot order received: {:?}", action);
+                self.process_place_order(action)?;
             }
-            PaperExchangeMessage::CancelOrder(_) => {
-                todo!("Cancel order logic not implemented yet");
+            PaperExchangeMessage::CancelOrder(cancel) => {
+                tracing::info!("Bot order received: {:?}", cancel);
+                if let Some(order) = self.pending_orders.cancel_order(cancel.oid) {
+                    self.broadcaster
+                        .send(InternalEvent::OrderCancelled(order))?;
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "Order with OID {} not found for cancellation",
+                        cancel.oid
+                    ));
+                }
             }
             PaperExchangeMessage::Close => {
                 // TODO: shutdown
@@ -143,91 +128,83 @@ impl PaperExchange {
         Ok(())
     }
 
-    fn is_pending_order_fillable(&self) -> bool {
-        if self.pending_bot_bids.is_empty() || self.pending_bot_asks.is_empty() {
-            return false;
+    fn process_place_order(&mut self, action: PlaceOrder) -> anyhow::Result<()> {
+        let order = Order {
+            oid: self.next_oid,
+            symbol: action.symbol.clone(),
+            price: action.price,
+            size: action.size,
+            side: action.side,
+        };
+        self.next_oid += 1;
+
+        // Simulate the fills
+        let fills = self.simulate_fill(&order, false);
+
+        // Update the pending orders state with the new order and broadcast the event
+        let place_order_event = InternalEvent::OrderPlaced(order);
+        self.pending_orders
+            .process_event(place_order_event.clone())?;
+        self.broadcaster.send(place_order_event)?;
+
+        // Update the bot position state and pending order state with the fills and broadcast the events
+        for fill in fills {
+            let fill_event = InternalEvent::OrderFilled(fill);
+            self.bot_position.process_event(fill_event.clone())?;
+            self.pending_orders.process_event(fill_event.clone())?;
+            self.broadcaster.send(fill_event)?;
         }
 
-        if let Some(best_bid) = self.orderbook.get_inner().best_bid() {
-            // Check if the best bid crosses the best ask in pending orders
-            if let Some(best_ask) = self.pending_bot_asks.keys().next() {
-                if best_bid >= *best_ask {
-                    return true;
-                }
-            }
-        }
-
-        if let Some(best_ask) = self.orderbook.get_inner().best_ask() {
-            // Check if the best ask crosses the best bid in pending orders
-            if let Some(best_bid) = self.pending_bot_bids.keys().next() {
-                if best_ask <= *best_bid {
-                    return true;
-                }
-            }
-        }
-
-        false
+        Ok(())
     }
 
-    fn fill_pending_orders(&mut self) -> Vec<Fill> {
-        let mut fills = Vec::new();
-
-        // Fill bot's pending bids
-        while let Some((bid_price, bid_size)) = self.pending_bot_bids.pop_last() {
-            let (bid_fills, remaining_bid) = self.fill_order(Side::Bid, bid_price, bid_size, true);
-            fills.extend(bid_fills);
-
-            // If there are remaining size, put it back to pending orders
-            if remaining_bid.is_positive() {
-                self.pending_bot_bids.insert(bid_price, remaining_bid);
-                // Because we are filling from best to worst, we can break early
-                break;
-            }
-        }
-
-        // Fill bot's pending asks
-        while let Some((ask_price, ask_size)) = self.pending_bot_asks.pop_first() {
-            let (ask_fills, remaining_ask) = self.fill_order(Side::Ask, ask_price, ask_size, true);
-            fills.extend(ask_fills);
-
-            // If there are remaining size, put it back to pending orders
-            if remaining_ask.is_positive() {
-                self.pending_bot_asks.insert(ask_price, remaining_ask);
-                // Because we are filling from best to worst, we can break early
-                break;
-            }
-        }
-
-        fills
-    }
-
-    fn fill_order(
-        &self,
-        side: Side,
-        price: Decimal,
-        size: Decimal,
-        is_maker: bool,
-    ) -> (Vec<Fill>, Decimal) {
+    fn simulate_fill(&self, order: &Order, is_maker: bool) -> Vec<Fill> {
         let inner = self.orderbook.get_inner();
-        let (fills, remaining_size) = match side {
-            Side::Bid => inner.simulate_buy(price, size),
-            Side::Ask => inner.simulate_sell(price, size),
+        let (fills, _) = match order.side {
+            Side::Bid => inner.simulate_buy(order.price, order.size),
+            Side::Ask => inner.simulate_sell(order.price, order.size),
         };
 
         let timestamp = chrono::Utc::now().timestamp_millis() as u64;
 
-        let fills = fills
+        fills
             .into_iter()
             .map(|(price, size)| Fill {
-                side,
+                oid: order.oid,
+                side: order.side,
                 price,
                 size,
                 is_maker,
                 timestamp,
             })
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+    }
 
-        (fills, remaining_size)
+    fn fill_pending_orders(&self) -> Vec<Fill> {
+        let mut fills = Vec::new();
+        let pending_orders = self.pending_orders.get_inner();
+
+        if let Some(best_bid) = self.orderbook.get_inner().best_bid() {
+            for pending_ask in pending_orders.asks_iter() {
+                if pending_ask.price > best_bid {
+                    break; // No more pending asks can be filled
+                }
+
+                fills.extend(self.simulate_fill(pending_ask, true));
+            }
+        }
+
+        if let Some(best_ask) = self.orderbook.get_inner().best_ask() {
+            for pending_bid in pending_orders.bids_iter() {
+                if pending_bid.price < best_ask {
+                    break; // No more pending bids can be filled
+                }
+
+                fills.extend(self.simulate_fill(pending_bid, true));
+            }
+        }
+
+        fills
     }
 
     fn produce_summary(&self) -> anyhow::Result<String> {
@@ -239,15 +216,13 @@ impl PaperExchange {
         let mut summary = String::new();
         summary.push_str("📊 PAPER TRADING SUMMARY\n");
         summary.push_str(&format!("💰 Current Market Price: {}\n", final_price));
-        summary.push_str("🟢 Pending Bids:\n");
-        for (price, size) in &self.pending_bot_bids {
-            summary.push_str(&format!("=> Price: {}, Size: {}\n", price, size));
+        summary.push_str("🟢 Pending Orders:\n");
+        for order in self.pending_orders.get_inner().iter() {
+            summary.push_str(&format!(
+                "=> Side: {}, Price: {}, Size: {:?}\n",
+                order.side, order.price, order.size
+            ));
         }
-        summary.push_str("🔴 Pending Asks:\n");
-        for (price, size) in &self.pending_bot_asks {
-            summary.push_str(&format!("=> Price: {}, Size: {}\n", price, size));
-        }
-
         summary.push_str("🎯 Bot Position:\n");
         summary.push_str(&format!(
             "=> Side: {}, Size: {}, Entry Price: {}\n",

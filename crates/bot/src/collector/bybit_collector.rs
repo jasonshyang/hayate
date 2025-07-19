@@ -4,15 +4,15 @@ use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 
-use crate::models::{BotEvent, OrderBookEventKind, OrderBookUpdate};
+use crate::models::{InternalEvent, OrderBookEventKind, OrderBookUpdate};
 
 pub struct BybitCollector {
     shutdown: CancellationToken,
 }
 
 #[async_trait::async_trait]
-impl Collector<BotEvent> for BybitCollector {
-    async fn get_event_stream(&self) -> anyhow::Result<CollectorStream<'_, BotEvent>> {
+impl Collector<InternalEvent> for BybitCollector {
+    async fn get_event_stream(&self) -> anyhow::Result<CollectorStream<'_, InternalEvent>> {
         let (tx, rx) = mpsc::unbounded_channel::<BybitMessage>();
         let mut client = BybitClient::new_with_shutdown(tx, self.shutdown.clone());
 
@@ -65,8 +65,10 @@ impl Collector<BotEvent> for BybitCollector {
                     };
 
                     match update.data_type {
-                        BybitOrderBookDataType::Snapshot => Some(BotEvent::OrderBookUpdate(data)),
-                        BybitOrderBookDataType::Delta => Some(BotEvent::OrderBookUpdate(data)),
+                        BybitOrderBookDataType::Snapshot => {
+                            Some(InternalEvent::OrderBookUpdate(data))
+                        }
+                        BybitOrderBookDataType::Delta => Some(InternalEvent::OrderBookUpdate(data)),
                     }
                 }
                 _ => None,

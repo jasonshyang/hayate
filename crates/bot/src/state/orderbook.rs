@@ -1,6 +1,6 @@
 use hayate_core::traits::State;
 
-use crate::models::{BotEvent, Decimal, OrderBook, OrderBookEventKind, Side};
+use crate::models::{Decimal, InternalEvent, OrderBook, OrderBookEventKind, Side};
 
 #[derive(Debug)]
 pub struct OrderBookState {
@@ -8,7 +8,7 @@ pub struct OrderBookState {
 }
 
 #[async_trait::async_trait]
-impl State<BotEvent> for OrderBookState {
+impl State<InternalEvent> for OrderBookState {
     fn name(&self) -> &str {
         "orderbook"
     }
@@ -18,9 +18,9 @@ impl State<BotEvent> for OrderBookState {
         Ok(())
     }
 
-    fn process_event(&mut self, event: BotEvent) -> anyhow::Result<()> {
+    fn process_event(&mut self, event: InternalEvent) -> anyhow::Result<()> {
         match event {
-            BotEvent::OrderBookUpdate(event) => match event.kind {
+            InternalEvent::OrderBookUpdate(event) => match event.kind {
                 OrderBookEventKind::Snapshot => {
                     self.update_snapshot(event.symbol, event.bids, event.asks)?;
                 }
@@ -28,7 +28,9 @@ impl State<BotEvent> for OrderBookState {
                     self.update_delta(event.symbol, event.bids, event.asks)?;
                 }
             },
-            BotEvent::OrderFilled(_) => {}
+            InternalEvent::OrderFilled(_) => {}
+            InternalEvent::OrderPlaced(_) => {}
+            InternalEvent::OrderCancelled(_) => {}
         }
 
         Ok(())

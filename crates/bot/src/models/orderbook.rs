@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 
 use crate::models::{Decimal, Side};
 
+/// Represents an order book snapshot, allowing for price querying
+/// and buy sell simulation.
 #[derive(Debug)]
 pub struct OrderBook {
     bids: BTreeMap<Decimal, Decimal>, // price -> total size
