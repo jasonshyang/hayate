@@ -1,9 +1,11 @@
-use crate::models::{Decimal, Side};
+use crate::models::{Decimal, Order, Side};
 
 #[derive(Debug, Clone)]
-pub enum BotEvent {
+pub enum InternalEvent {
     OrderBookUpdate(OrderBookUpdate),
+    OrderPlaced(Order),
     OrderFilled(Fill),
+    OrderCancelled(Order),
 }
 
 #[derive(Debug, Clone)]
@@ -23,8 +25,7 @@ pub struct OrderBookUpdate {
 
 #[derive(Debug, Clone)]
 pub struct Fill {
-    // TODO
-    // pub symbol: String,
+    pub oid: usize,
     pub side: Side,
     pub price: Decimal,
     pub size: Decimal,

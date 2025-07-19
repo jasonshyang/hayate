@@ -2,15 +2,15 @@ use hayate_core::traits::{Collector, CollectorStream};
 use tokio::sync::broadcast;
 use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 
-use crate::models::BotEvent;
+use crate::models::InternalEvent;
 
 pub struct PaperCollector {
-    rx: broadcast::Receiver<BotEvent>,
+    rx: broadcast::Receiver<InternalEvent>,
 }
 
 #[async_trait::async_trait]
-impl Collector<BotEvent> for PaperCollector {
-    async fn get_event_stream(&self) -> anyhow::Result<CollectorStream<'_, BotEvent>> {
+impl Collector<InternalEvent> for PaperCollector {
+    async fn get_event_stream(&self) -> anyhow::Result<CollectorStream<'_, InternalEvent>> {
         let rx = self.rx.resubscribe();
         let stream = BroadcastStream::new(rx).filter_map(|r| r.ok());
 
@@ -19,7 +19,7 @@ impl Collector<BotEvent> for PaperCollector {
 }
 
 impl PaperCollector {
-    pub fn new(rx: broadcast::Receiver<BotEvent>) -> Self {
+    pub fn new(rx: broadcast::Receiver<InternalEvent>) -> Self {
         Self { rx }
     }
 }

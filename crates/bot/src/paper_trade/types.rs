@@ -1,7 +1,7 @@
-use crate::models::Order;
+use crate::models::{CancelOrder, PlaceOrder};
 
 pub enum PaperExchangeMessage {
-    PlaceOrder(Order),
-    CancelOrder(Order),
+    PlaceOrder(PlaceOrder),
+    CancelOrder(CancelOrder),
     Close,
 }

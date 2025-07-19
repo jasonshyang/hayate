@@ -8,6 +8,7 @@ pub enum Side {
 
 #[derive(Debug, Clone)]
 pub struct Order {
+    pub oid: usize,
     pub symbol: String,
     pub side: Side,
     pub price: Decimal,
@@ -28,6 +29,18 @@ impl std::fmt::Display for Side {
         match self {
             Side::Bid => write!(f, "bid"),
             Side::Ask => write!(f, "ask"),
+        }
+    }
+}
+
+impl Order {
+    pub fn new(oid: usize, symbol: String, side: Side, price: Decimal, size: Decimal) -> Self {
+        Self {
+            oid,
+            symbol,
+            side,
+            price,
+            size,
         }
     }
 }

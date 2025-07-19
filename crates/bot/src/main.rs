@@ -6,7 +6,7 @@ use bot::{
     executor::paper_executor::PaperExecutor,
     models::{BotAction, Decimal},
     paper_trade::{paper_exchange::PaperExchange, types::PaperExchangeMessage},
-    state::{BotState, OrderBookState, PositionState},
+    state::{BotState, OrderBookState, PendingOrdersState, PositionState},
 };
 use hayate_core::{mappers::ExecutorMap, run::run_bot};
 use tokio::sync::RwLock;
@@ -42,10 +42,13 @@ async fn main() {
     );
     let orderbook_state = Arc::new(RwLock::new(BotState::OrderBook(OrderBookState::new(1024))));
     let position_state = Arc::new(RwLock::new(BotState::Position(PositionState::new())));
+    let pending_orders_state = Arc::new(RwLock::new(BotState::PendingOrders(
+        PendingOrdersState::new(),
+    )));
 
     let mut set = run_bot(
         market_making_bot,
-        vec![orderbook_state, position_state],
+        vec![orderbook_state, position_state, pending_orders_state],
         vec![Box::new(paper_collector)],
         vec![Box::new(paper_executor)],
         shutdown.clone(),

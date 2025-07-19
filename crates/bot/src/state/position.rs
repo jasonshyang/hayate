@@ -1,6 +1,6 @@
 use hayate_core::traits::State;
 
-use crate::models::{BotEvent, Decimal, Position, Side};
+use crate::models::{Decimal, InternalEvent, Position, Side};
 
 #[derive(Debug, Default)]
 pub struct PositionState {
@@ -8,7 +8,7 @@ pub struct PositionState {
 }
 
 #[async_trait::async_trait]
-impl State<BotEvent> for PositionState {
+impl State<InternalEvent> for PositionState {
     fn name(&self) -> &str {
         "position"
     }
@@ -18,12 +18,14 @@ impl State<BotEvent> for PositionState {
         Ok(())
     }
 
-    fn process_event(&mut self, event: BotEvent) -> anyhow::Result<()> {
+    fn process_event(&mut self, event: InternalEvent) -> anyhow::Result<()> {
         match event {
-            BotEvent::OrderFilled(fill) => {
+            InternalEvent::OrderFilled(fill) => {
                 self.update_position(fill.side, fill.price, fill.size, fill.timestamp);
             }
-            BotEvent::OrderBookUpdate(_) => {}
+            InternalEvent::OrderCancelled(_) => {}
+            InternalEvent::OrderBookUpdate(_) => {}
+            InternalEvent::OrderPlaced(_) => {}
         }
 
         Ok(())

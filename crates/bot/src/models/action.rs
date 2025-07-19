@@ -1,7 +1,21 @@
-use crate::models::Order;
+use crate::models::{Decimal, Side};
 
 #[derive(Debug, Clone)]
 pub enum BotAction {
-    PlaceOrder(Order),
-    CancelOrder(Order),
+    PlaceOrder(PlaceOrder),
+    CancelOrder(CancelOrder),
+}
+
+#[derive(Debug, Clone)]
+pub struct PlaceOrder {
+    pub symbol: String,
+    pub side: Side,
+    pub price: Decimal,
+    pub size: Decimal,
+}
+
+#[derive(Debug, Clone)]
+pub struct CancelOrder {
+    pub symbol: String,
+    pub oid: usize,
 }

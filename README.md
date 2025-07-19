@@ -72,7 +72,7 @@ The bot crate includes a comprehensive paper trading system for testing and vali
 - **`PaperCollector`**: Collects events from the paper exchange for bot consumption  
 - **`PaperExecutor`**: Executes bot actions within the simulated environment
 
-The paper exchange acts as a proxy, taking real market data from any source collector that implements `Collector<BotEvent>` and simulating trade execution against that live data. This allows you to:
+The paper exchange acts as a proxy, taking real market data from any source collector that implements `Collector<InternalEvent>` and simulating trade execution against that live data. This allows you to:
 
 - **Test strategies** with real market conditions without risking capital  
 - **Validate bot logic** before deploying to live trading  
