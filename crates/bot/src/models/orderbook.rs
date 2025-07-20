@@ -228,23 +228,17 @@ mod orderbook_tests {
         orderbook.insert(Side::Ask, 102.into(), 2.into()).unwrap();
 
         orderbook
-            .adjust(Side::Bid, 100.into(), Decimal::from_f64_unchecked(0.5))
+            .adjust(Side::Bid, 100.into(), Decimal::from(0.5))
             .unwrap();
-        assert_eq!(
-            orderbook.bids.get(&100.into()),
-            Some(&Decimal::from_f64_unchecked(1.5))
-        );
+        assert_eq!(orderbook.bids.get(&100.into()), Some(&Decimal::from(1.5)));
 
         orderbook
-            .adjust(Side::Ask, 101.into(), Decimal::from_f64_unchecked(-0.5))
+            .adjust(Side::Ask, 101.into(), Decimal::from(-0.5))
             .unwrap();
-        assert_eq!(
-            orderbook.asks.get(&101.into()),
-            Some(&Decimal::from_f64_unchecked(2.5))
-        );
+        assert_eq!(orderbook.asks.get(&101.into()), Some(&Decimal::from(2.5)));
 
         orderbook
-            .adjust(Side::Bid, 99.into(), Decimal::from_f64_unchecked(-2.0))
+            .adjust(Side::Bid, 99.into(), Decimal::from(-2.0))
             .unwrap();
         assert!(orderbook.bids.get(&99.into()).is_none());
     }

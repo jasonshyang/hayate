@@ -15,6 +15,15 @@ pub struct Order {
     pub size: Decimal,
 }
 
+#[derive(Debug, Clone)]
+pub struct Trade {
+    pub symbol: String,
+    pub side: Side,
+    pub price: Decimal,
+    pub size: Decimal,
+    pub timestamp: u64,
+}
+
 impl Side {
     pub fn opposite(self) -> Self {
         match self {

@@ -1,8 +1,9 @@
-use crate::models::{Decimal, Order, Side};
+use crate::models::{Decimal, Order, Side, Trade};
 
 #[derive(Debug, Clone)]
 pub enum InternalEvent {
     OrderBookUpdate(OrderBookUpdate),
+    Trade(Trade),
     OrderPlaced(Order),
     OrderFilled(Fill),
     OrderCancelled(Order),
