@@ -39,6 +39,39 @@ impl Decimal {
     pub fn is_negative(&self) -> bool {
         self.sign < 0 && !self.is_zero()
     }
+
+    pub fn abs(&self) -> Self {
+        Self {
+            sign: 1,
+            raw: self.raw,
+        }
+    }
+
+    pub fn to_f64(&self) -> f64 {
+        if self.is_zero() {
+            return 0.0;
+        }
+
+        let value = self.raw as f64 / Self::SCALE as f64;
+        if self.sign < 0 {
+            -value
+        } else {
+            value
+        }
+    }
+
+    pub fn to_i64(&self) -> i64 {
+        if self.is_zero() {
+            return 0;
+        }
+
+        let value = self.raw as i64 / Self::SCALE as i64;
+        if self.sign < 0 {
+            -value
+        } else {
+            value
+        }
+    }
 }
 
 impl FromStr for Decimal {

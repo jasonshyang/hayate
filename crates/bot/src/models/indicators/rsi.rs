@@ -1,17 +1,9 @@
-use std::{collections::VecDeque, fmt::Debug};
+use std::collections::VecDeque;
 
-use crate::models::Decimal;
-
-pub trait Indicator: Debug + Send + Sync {
-    fn name(&self) -> &str;
-    fn value(&self) -> Option<Decimal>;
-    fn should_update(&self, timestamp: u64) -> bool;
-    fn update(&mut self, price: Decimal, timestamp: u64);
-    fn reset(&mut self);
-}
+use crate::models::{Decimal, Indicator};
 
 #[derive(Debug, Clone)]
-pub struct RSI {
+pub struct Rsi {
     period: usize,
     values: VecDeque<Decimal>,
     current_value: Option<Decimal>,
@@ -19,7 +11,9 @@ pub struct RSI {
     update_interval: u64,
 }
 
-impl RSI {
+impl Rsi {
+    pub const NAME: &'static str = "rsi";
+
     pub fn new(period: usize, update_interval: u64) -> Self {
         Self {
             period,
@@ -29,19 +23,19 @@ impl RSI {
             update_interval,
         }
     }
+
+    fn should_update(&self, timestamp: u64) -> bool {
+        timestamp - self.last_updated_at >= self.update_interval
+    }
 }
 
-impl Indicator for RSI {
+impl Indicator for Rsi {
     fn name(&self) -> &str {
-        "rsi"
+        Self::NAME
     }
 
     fn value(&self) -> Option<Decimal> {
         self.current_value
-    }
-
-    fn should_update(&self, timestamp: u64) -> bool {
-        timestamp - self.last_updated_at >= self.update_interval
     }
 
     fn update(&mut self, price: Decimal, timestamp: u64) {
@@ -132,7 +126,7 @@ mod tests {
             Decimal::from(45.0),  // - 0.1
         ];
 
-        let mut rsi = RSI::new(14, 100);
+        let mut rsi = Rsi::new(14, 100);
         let mut ts = chrono::Utc::now().timestamp() as u64;
         for price in prices {
             rsi.update(price, ts);
