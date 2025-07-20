@@ -4,9 +4,9 @@ use bot::{
     collector::{bybit_collector::BybitCollector, paper_collector::PaperCollector},
     core::market_making_with_dynamic_spread::DynamicSpreadMM,
     executor::paper_executor::PaperExecutor,
-    models::{BotAction, RSI},
+    models::{BotAction, Decimal, Natr, Rsi},
     paper_trade::{paper_exchange::PaperExchange, types::PaperExchangeMessage},
-    state::{BotState, PriceState},
+    state::{BotState, OrderBookState, PendingOrdersState, PriceState},
 };
 use hayate_core::{mappers::ExecutorMap, run::run_bot};
 use tokio::sync::RwLock;
@@ -16,7 +16,14 @@ use tokio_util::sync::CancellationToken;
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let market_making_bot = DynamicSpreadMM { interval_ms: 1000 };
+    let market_making_bot = DynamicSpreadMM {
+        interval_ms: 500,
+        symbol: "BTCUSD".to_string(),
+        order_amount: Decimal::from(1.0),
+        base_spread: Decimal::from(0.01),
+        volatility_target: Decimal::from(0.02),
+        skew_strength: Decimal::from(0.05),
+    };
 
     // Create a channel for sending messages to the PaperExchange
     let (msg_tx, msg_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -34,20 +41,22 @@ async fn main() {
             BotAction::CancelOrder(order) => Some(PaperExchangeMessage::CancelOrder(order)),
         },
     );
-    // let orderbook_state = Arc::new(RwLock::new(BotState::OrderBook(OrderBookState::new(1024))));
+    let orderbook_state = Arc::new(RwLock::new(BotState::OrderBook(OrderBookState::new(1024))));
     // let position_state = Arc::new(RwLock::new(BotState::Position(PositionState::new())));
-    // let pending_orders_state = Arc::new(RwLock::new(BotState::PendingOrders(
-    //     PendingOrdersState::new(),
-    // )));
+    let pending_orders_state = Arc::new(RwLock::new(BotState::PendingOrders(
+        PendingOrdersState::new(),
+    )));
 
     let mut price_state = PriceState::new();
-    price_state.add_indicator(Box::new(RSI::new(14, 500)));
+
+    price_state.add_indicator(Box::new(Rsi::new(14, 1000)));
+    price_state.add_indicator(Box::new(Natr::new(14, 1000)));
 
     let price_state = Arc::new(RwLock::new(BotState::Price(price_state)));
 
     let mut set = run_bot(
         market_making_bot,
-        vec![price_state],
+        vec![orderbook_state, pending_orders_state, price_state],
         vec![Box::new(paper_collector)],
         vec![Box::new(paper_executor)],
         shutdown.clone(),
