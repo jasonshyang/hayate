@@ -12,8 +12,8 @@ pub struct SMM {
     pub interval_ms: u64,
     pub symbol: String,
     pub order_amount: Decimal,
-    pub bid_spread: f64,
-    pub ask_spread: f64,
+    pub bid_spread: Decimal,
+    pub ask_spread: Decimal,
 }
 
 impl Bot<SMMInput, BotAction> for SMM {
@@ -24,6 +24,20 @@ impl Bot<SMMInput, BotAction> for SMM {
     fn evaluate(&self, input: SMMInput) -> anyhow::Result<Vec<BotAction>> {
         let mut actions = Vec::new();
 
+        tracing::debug!(
+            "Evaluating SMM with mid_price: {:?}, pending_oids: {:?}",
+            input.mid_price,
+            input.pending_oids
+        );
+
+        let mid_price = match input.mid_price {
+            Some(price) => price,
+            None => {
+                tracing::info!("Mid price not available, skipping evaluation");
+                return Ok(actions);
+            }
+        };
+
         for oid in input.pending_oids {
             actions.push(BotAction::CancelOrder(CancelOrder {
                 symbol: self.symbol.clone(),
@@ -31,17 +45,11 @@ impl Bot<SMMInput, BotAction> for SMM {
             }));
         }
 
-        let bid_spread = Decimal::from(self.bid_spread);
-        let ask_spread = Decimal::from(self.ask_spread);
+        let bid_price = mid_price - self.bid_spread;
+        let ask_price = mid_price + self.ask_spread;
 
-        let mid_price = input
-            .mid_price
-            .ok_or_else(|| anyhow::anyhow!("Mid price not available"))?;
-        let bid_price = mid_price - bid_spread;
-        let ask_price = mid_price + ask_spread;
-
-        tracing::debug!(
-            "Current mid price: {}, placing orders at bid: {}, ask: {}",
+        tracing::info!(
+            "SMM Strategy placing order based on mid price: {}, bid price: {}, ask price: {}",
             mid_price,
             bid_price,
             ask_price
@@ -84,7 +92,7 @@ impl Input<BotState> for SMMInput {
                 if let Some(mid_price) = order_book_state.get_mid_price() {
                     self.mid_price = Some(mid_price);
                 } else {
-                    return Err(anyhow::anyhow!("Mid price not available in OrderBookState"));
+                    tracing::debug!("Mid price not available in OrderBookState");
                 }
             }
             BotState::Position(position) => {

@@ -20,8 +20,8 @@ async fn main() {
         interval_ms: 1000,
         symbol: "BTCUSD".to_string(),
         order_amount: Decimal::from(10),
-        bid_spread: 0.01,
-        ask_spread: 0.01,
+        bid_spread: Decimal::from(0.01),
+        ask_spread: Decimal::from(0.01),
     };
 
     // Create a channel for sending messages to the PaperExchange
