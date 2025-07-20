@@ -31,7 +31,7 @@ impl State<InternalEvent> for OrderBookState {
             InternalEvent::OrderFilled(_)
             | InternalEvent::OrderPlaced(_)
             | InternalEvent::OrderCancelled(_)
-            | InternalEvent::Trade(_) => {}
+            | InternalEvent::TradeUpdate(_) => {}
         }
 
         Ok(())

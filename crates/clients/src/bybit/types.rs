@@ -18,6 +18,7 @@ pub enum BybitMessage {
         operation: String,
     },
     OrderBookUpdate(BybitOrderBookUpdate),
+    TradeUpdate(BybitTradeUpdate),
 }
 
 #[derive(Deserialize, Debug)]
@@ -29,7 +30,7 @@ pub struct BybitOrderBookUpdate {
     pub timestamp: u64,
     /// Data type: snapshot,delta
     #[serde(rename = "type")]
-    pub data_type: BybitOrderBookDataType,
+    pub data_type: BybitDataType,
     /// Order book data
     #[serde(rename = "data")]
     pub data: BybitOrderBookData,
@@ -41,7 +42,7 @@ pub struct BybitOrderBookUpdate {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
-pub enum BybitOrderBookDataType {
+pub enum BybitDataType {
     Snapshot,
     Delta,
 }
@@ -66,4 +67,50 @@ pub struct BybitOrderBookData {
     /// Cross sequence
     #[serde(rename = "seq")]
     pub sequence: u64,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct BybitTradeUpdate {
+    /// Topic name
+    pub topic: String,
+    /// The timestamp (ms) that the system generates the data
+    #[serde(rename = "ts")]
+    pub timestamp: u64,
+    /// Data type: trade
+    #[serde(rename = "type")]
+    pub data_type: BybitDataType,
+    /// Trade data
+    #[serde(rename = "data")]
+    pub data: Vec<BybitTradeData>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct BybitTradeData {
+    /// The timestamp (ms) that the order is filled
+    #[serde(rename = "T")]
+    pub timestamp: u64,
+    /// Symbol name, e.g. SOLUSDT_SOL/USDT
+    #[serde(rename = "s")]
+    pub symbol: String,
+    /// Side of taker
+    #[serde(rename = "S")]
+    pub side: String,
+    /// Trade ID
+    #[serde(rename = "v")]
+    pub size: String,
+    /// Price
+    #[serde(rename = "p")]
+    pub price: String,
+    /// Direction of price change, this is documented but not provided
+    // #[serde(rename = "L")]
+    // pub direction: String,
+    /// Trade ID
+    #[serde(rename = "i")]
+    pub trade_id: String,
+    /// Undocumented on Bybit documentation
+    #[serde(rename = "BT")]
+    pub bt: bool,
+    /// Undocumented on Bybit documentation
+    #[serde(rename = "RPI")]
+    pub rpi: bool,
 }
