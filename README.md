@@ -2,6 +2,12 @@
 
 **Hayate** (疾風) is an algorithmic trading bot framework built in Rust, providing a clean architecture for building trading bots with real-time market data processing, state management, and execution capabilities.
 
+## Bot Strategies
+
+Currently only two strategies are available as examples:
+- Simple Market Making: place limit order on both sides of the orderbook with a fixed spread
+- Dynamic Spread Market Making; place limit order on both sides of the orderbook with a dynamic spread based on indicators (in dev)
+
 ## Development Status
 
 Hayate is currently in active development. Core features are functional but the API may change.
@@ -60,7 +66,7 @@ The core crate containing traits with a `run_bot` function to orchestrate the en
 ### 🤖 `bot`
 Contains bot implementations, trading models, and business logic. Includes:
 - **Collectors**: Data ingestion from exchanges (e.g. `BybitCollector`)
-- **States**: State management (e.g. `OrderBookState`, `PositionState`)  
+- **States**: State management (e.g. `OrderBookState`, `PositionState`, `PriceState`)  
 - **Core**: Trading strategies (e.g. `SimpleMarketMaking`)
 - **Executors**: Trade execution
 - **Models**: Data structures and types used throughout the system
@@ -89,9 +95,9 @@ Networking layer providing HTTP and WebSocket client abstractions. Handles conne
 
 ### Quick Start
 ```bash
-# Run the example simple market making bot
-cargo run --bin bot
+# Run the simple market making bot with paper trade
+cargo run --bin simple_market_making
 
-# Run with logs
-RUST_LOG=info cargo run --bin bot
+# Run the dynamic spread market making bot with paper trade
+cargo run --bin market_making_with_dynamic_spread
 ```
