@@ -22,8 +22,10 @@ impl State<InternalEvent> for PriceState {
 
     fn process_event(&mut self, event: InternalEvent) -> anyhow::Result<()> {
         match event {
-            InternalEvent::Trade(trade) => {
-                self.update(trade.price, trade.timestamp);
+            InternalEvent::TradeUpdate(trades) => {
+                for trade in trades {
+                    self.update(trade.price, trade.timestamp);
+                }
             }
             InternalEvent::OrderBookUpdate(_)
             | InternalEvent::OrderPlaced(_)

@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::models::Decimal;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -29,6 +31,20 @@ impl Side {
         match self {
             Side::Bid => Side::Ask,
             Side::Ask => Side::Bid,
+        }
+    }
+}
+
+impl FromStr for Side {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "bid" => Ok(Side::Bid),
+            "ask" => Ok(Side::Ask),
+            "buy" => Ok(Side::Bid),
+            "sell" => Ok(Side::Ask),
+            _ => Err("Invalid side"),
         }
     }
 }

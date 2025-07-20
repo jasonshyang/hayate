@@ -26,7 +26,7 @@ impl State<InternalEvent> for PositionState {
             InternalEvent::OrderCancelled(_)
             | InternalEvent::OrderPlaced(_)
             | InternalEvent::OrderBookUpdate(_)
-            | InternalEvent::Trade(_) => {}
+            | InternalEvent::TradeUpdate(_) => {}
         }
 
         Ok(())

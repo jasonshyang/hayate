@@ -40,20 +40,33 @@ impl BybitClient {
 #[async_trait::async_trait]
 impl WsHandler for BybitWsHandler {
     async fn on_open(&mut self, sender: mpsc::UnboundedSender<Message>) -> anyhow::Result<()> {
+        // TODO: move to config
         let depth = 50; // Depth of the order book
         let symbol = "BTCUSDT"; // Symbol to subscribe to
-        let topic = format!("orderbook.{}.{}", depth, symbol);
+        let ob_topic = format!("orderbook.{}.{}", depth, symbol);
 
         // TODO: fix hardcoded subscription message
-        let subscribe_msg = serde_json::json!({
+        let ob_subscribe_msg = serde_json::json!({
             "req_id": "test", // optional
             "op": "subscribe",
-            "args": [topic]
+            "args": [ob_topic]
         })
         .to_string();
 
-        sender.send(Message::Text(subscribe_msg.into()))?;
+        sender.send(Message::Text(ob_subscribe_msg.into()))?;
         tracing::info!("Subscribed to orderbook updates for {}", symbol);
+
+        // TODO: allow user to define what to subscribe to
+        let trade_topic = format!("publicTrade.{}", symbol);
+        let trade_subscribe_msg = serde_json::json!({
+            "req_id": "test", // optional
+            "op": "subscribe",
+            "args": [trade_topic]
+        })
+        .to_string();
+
+        sender.send(Message::Text(trade_subscribe_msg.into()))?;
+        tracing::info!("Subscribed to trade updates for {}", symbol);
 
         self.ws_sender = Some(sender);
         Ok(())
@@ -65,8 +78,9 @@ impl WsHandler for BybitWsHandler {
             match message {
                 Message::Text(text) => {
                     tracing::trace!("Received text message: {}", text);
-                    let msg: BybitMessage = serde_json::from_str(&text)
-                        .map_err(|e| anyhow::anyhow!("Failed to parse message: {}", e))?;
+                    let msg: BybitMessage = serde_json::from_str(&text).map_err(|e| {
+                        anyhow::anyhow!("Failed to parse message: {}, error: {}", text, e)
+                    })?;
                     tracing::trace!("Parsed message: {:?}", msg);
                     self.msg_sender
                         .send(msg)

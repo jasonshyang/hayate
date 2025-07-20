@@ -1,10 +1,12 @@
-use clients::{BybitClient, BybitMessage, BybitOrderBookDataType};
+use std::str::FromStr;
+
+use clients::{BybitClient, BybitDataType, BybitMessage};
 use hayate_core::traits::{Collector, CollectorStream};
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 
-use crate::models::{InternalEvent, OrderBookEventKind, OrderBookUpdate};
+use crate::models::{InternalEvent, OrderBookEventKind, OrderBookUpdate, Side, Trade};
 
 pub struct BybitCollector {
     shutdown: CancellationToken,
@@ -52,8 +54,8 @@ impl Collector<InternalEvent> for BybitCollector {
                         .collect();
 
                     let kind = match update.data_type {
-                        BybitOrderBookDataType::Snapshot => OrderBookEventKind::Snapshot,
-                        BybitOrderBookDataType::Delta => OrderBookEventKind::Delta,
+                        BybitDataType::Snapshot => OrderBookEventKind::Snapshot,
+                        BybitDataType::Delta => OrderBookEventKind::Delta,
                     };
 
                     let data = OrderBookUpdate {
@@ -65,10 +67,33 @@ impl Collector<InternalEvent> for BybitCollector {
                     };
 
                     match update.data_type {
-                        BybitOrderBookDataType::Snapshot => {
-                            Some(InternalEvent::OrderBookUpdate(data))
-                        }
-                        BybitOrderBookDataType::Delta => Some(InternalEvent::OrderBookUpdate(data)),
+                        BybitDataType::Snapshot => Some(InternalEvent::OrderBookUpdate(data)),
+                        BybitDataType::Delta => Some(InternalEvent::OrderBookUpdate(data)),
+                    }
+                }
+                BybitMessage::TradeUpdate(update) => {
+                    let trades = update
+                        .data
+                        .into_iter()
+                        .filter_map(|trade| {
+                            let price = trade.price.try_into().ok()?;
+                            let size = trade.size.try_into().ok()?;
+                            let timestamp = update.timestamp;
+
+                            Some(Trade {
+                                symbol: update.topic.clone(),
+                                price,
+                                size,
+                                side: Side::from_str(&trade.side).ok()?,
+                                timestamp,
+                            })
+                        })
+                        .collect::<Vec<_>>();
+
+                    if trades.is_empty() {
+                        None
+                    } else {
+                        Some(InternalEvent::TradeUpdate(trades))
                     }
                 }
                 _ => None,
