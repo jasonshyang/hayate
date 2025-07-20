@@ -6,7 +6,7 @@
 
 Currently only two strategies are available as examples:
 - Simple Market Making: place limit order on both sides of the orderbook with a fixed spread
-- Dynamic Spread Market Making; place limit order on both sides of the orderbook with a dynamic spread based on indicators (in dev)
+- Dynamic Spread Market Making; place limit order on both sides of the orderbook with a dynamic spread based on RSI and NATR
 
 ## Development Status
 
