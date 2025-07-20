@@ -1,5 +1,6 @@
 use std::{
     hash::Hash,
+    iter::Sum,
     ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign},
     str::FromStr,
 };
@@ -14,14 +15,17 @@ impl Decimal {
     pub const DECIMAL: usize = 6;
     pub const SCALE: u64 = 10u64.pow(Self::DECIMAL as u32);
     pub const ZERO: Self = Self { sign: 1, raw: 0 };
-    pub const MAX: u64 = u64::MAX / Self::SCALE;
+    pub const ONE: Self = Self {
+        sign: 1,
+        raw: Self::SCALE,
+    };
+    pub const MAX: Self = Self {
+        sign: 1,
+        raw: u64::MAX / Self::SCALE,
+    };
 
     pub fn from_str_unchecked(value: &str) -> Self {
         Decimal::from_str(value).unwrap()
-    }
-
-    pub fn from_f64_unchecked(value: f64) -> Self {
-        Decimal::try_from(value).unwrap()
     }
 
     pub fn is_zero(&self) -> bool {
@@ -45,28 +49,17 @@ impl FromStr for Decimal {
     }
 }
 
-impl TryFrom<f64> for Decimal {
-    type Error = &'static str;
-
-    fn try_from(value: f64) -> Result<Self, Self::Error> {
+impl From<f64> for Decimal {
+    fn from(value: f64) -> Self {
         if value.is_nan() || value.is_infinite() {
-            return Err("Cannot convert NaN or infinite value to Decimal");
-        }
-
-        if value == 0.0 {
-            return Ok(Self::ZERO);
-        }
-
-        if value.abs() > Self::MAX as f64 {
-            return Err("Value exceeds Decimal maximum limit");
+            panic!("Cannot convert NaN or infinite value to Decimal");
         }
 
         let sign = if value < 0.0 { -1 } else { 1 };
-        let abs_value = value.abs();
-        let scaled = abs_value * (Decimal::SCALE as f64);
+        let scaled = value.abs() * (Decimal::SCALE as f64);
         let raw = scaled.round() as u64;
 
-        Ok(Self { sign, raw })
+        Self { sign, raw }
     }
 }
 
@@ -225,7 +218,7 @@ impl Mul for Decimal {
         let sign = self.sign * other.sign;
         let raw = (self.raw as u128 * other.raw as u128) / Decimal::SCALE as u128;
 
-        if raw > Decimal::MAX as u128 {
+        if raw as u64 > Decimal::MAX.raw {
             panic!("Decimal multiplication overflow");
         }
 
@@ -247,6 +240,12 @@ impl Neg for Decimal {
             sign: -self.sign,
             raw: self.raw,
         }
+    }
+}
+
+impl Sum for Decimal {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Self::ZERO, |acc, x| acc + x)
     }
 }
 
@@ -307,13 +306,13 @@ mod decimal_tests {
 
     #[test]
     fn test_decimal_creation() {
-        let d1 = Decimal::try_from(123.456789).unwrap();
+        let d1 = Decimal::from(123.456789);
         assert_eq!(d1.to_string(), "123.456789");
 
-        let d2 = Decimal::try_from(-123.456789).unwrap();
+        let d2 = Decimal::from(-123.456789);
         assert_eq!(d2.to_string(), "-123.456789");
 
-        let d3 = Decimal::try_from(0u64).unwrap();
+        let d3 = Decimal::from(0u64);
         assert_eq!(d3.to_string(), "0.000000");
 
         let d4 = Decimal::from(100u64);
@@ -340,21 +339,21 @@ mod decimal_tests {
 
     #[test]
     fn test_decimal_addition() {
-        let mut d1 = Decimal::try_from(100).unwrap();
-        let d2 = Decimal::try_from(50.0).unwrap();
+        let mut d1 = Decimal::from(100);
+        let d2 = Decimal::from(50.0);
         d1 += d2;
         assert_eq!(d1.to_string(), "150.000000");
 
-        let d3 = Decimal::try_from(-30.0).unwrap();
+        let d3 = Decimal::from(-30.0);
         d1 += d3;
         assert_eq!(d1.to_string(), "120.000000");
 
-        let mut d4 = Decimal::try_from(-120.0).unwrap();
-        let d5 = Decimal::try_from(-20.0).unwrap();
+        let mut d4 = Decimal::from(-120.0);
+        let d5 = Decimal::from(-20.0);
         d4 += d5;
         assert_eq!(d4.to_string(), "-140.000000");
 
-        let d6 = Decimal::try_from(140.0).unwrap();
+        let d6 = Decimal::from(140.0);
         d4 += d6;
         assert_eq!(d4.to_string(), "0.000000");
         assert_eq!(d4, Decimal::ZERO);
@@ -362,37 +361,37 @@ mod decimal_tests {
 
     #[test]
     fn test_decimal_subtraction() {
-        let mut d1 = Decimal::try_from(100).unwrap();
-        let d2 = Decimal::try_from(50.0).unwrap();
+        let mut d1 = Decimal::from(100);
+        let d2 = Decimal::from(50.0);
         d1 -= d2;
         assert_eq!(d1.to_string(), "50.000000");
 
-        let d3 = Decimal::try_from(30.0).unwrap();
+        let d3 = Decimal::from(30.0);
         d1 -= d3;
         assert_eq!(d1.to_string(), "20.000000");
 
-        let mut d4 = Decimal::try_from(-20.0).unwrap();
-        let d5 = Decimal::try_from(-10.0).unwrap();
+        let mut d4 = Decimal::from(-20.0);
+        let d5 = Decimal::from(-10.0);
         d4 -= d5;
         assert_eq!(d4.to_string(), "-10.000000");
-        let d6 = Decimal::try_from(-10.0).unwrap();
+        let d6 = Decimal::from(-10.0);
         d4 -= d6;
         assert_eq!(d4.to_string(), "0.000000");
         assert_eq!(d4, Decimal::ZERO);
 
-        let d7 = Decimal::try_from(100.0).unwrap();
+        let d7 = Decimal::from(100.0);
         d4 -= d7;
         assert_eq!(d4.to_string(), "-100.000000");
     }
 
     #[test]
     fn test_decimal_division() {
-        let d1 = Decimal::try_from(100.0).unwrap();
-        let d2 = Decimal::try_from(2.0).unwrap();
+        let d1 = Decimal::from(100.0);
+        let d2 = Decimal::from(2.0);
         let result = d1 / d2;
         assert_eq!(result.to_string(), "50.000000");
 
-        let d3 = Decimal::try_from(0.5).unwrap();
+        let d3 = Decimal::from(0.5);
         let result = d1 / d3;
         assert_eq!(result.to_string(), "200.000000");
     }
@@ -400,45 +399,45 @@ mod decimal_tests {
     #[test]
     #[should_panic(expected = "Division by zero in Decimal division")]
     fn test_decimal_zero_division() {
-        let d1 = Decimal::try_from(100.0).unwrap();
-        let d2 = Decimal::try_from(0.0).unwrap();
+        let d1 = Decimal::from(100.0);
+        let d2 = Decimal::from(0.0);
         let _result = d1 / d2; // This should panic
     }
 
     #[test]
     fn test_decimal_multiplication() {
-        let d1 = Decimal::try_from(10.0).unwrap();
-        let d2 = Decimal::try_from(5.0).unwrap();
+        let d1 = Decimal::from(10.0);
+        let d2 = Decimal::from(5.0);
         let result = d1 * d2;
         assert_eq!(result.to_string(), "50.000000");
 
-        let d3 = Decimal::try_from(0.1).unwrap();
+        let d3 = Decimal::from(0.1);
         let result = d1 * d3;
         assert_eq!(result.to_string(), "1.000000");
 
-        let d4 = Decimal::try_from(0.0).unwrap();
+        let d4 = Decimal::from(0.0);
         let result = d1 * d4;
         assert_eq!(result.to_string(), "0.000000");
-        let d5 = Decimal::try_from(-2.0).unwrap();
+        let d5 = Decimal::from(-2.0);
         let result = d1 * d5;
         assert_eq!(result.to_string(), "-20.000000");
 
-        let d6 = Decimal::try_from(105).unwrap();
-        let d7 = Decimal::try_from(0.5).unwrap();
+        let d6 = Decimal::from(105);
+        let d7 = Decimal::from(0.5);
         let result = d6 * d7;
         assert_eq!(result.to_string(), "52.500000");
     }
 
     #[test]
     fn test_decimal_op_combination() {
-        let d1 = Decimal::try_from(100.0).unwrap();
-        let d2 = Decimal::try_from(1.5).unwrap();
+        let d1 = Decimal::from(100.0);
+        let d2 = Decimal::from(1.5);
         assert_eq!((d1 * d2).to_string(), "150.000000");
-        let d3 = Decimal::try_from(105).unwrap();
-        let d4 = Decimal::try_from(0.5).unwrap();
+        let d3 = Decimal::from(105);
+        let d4 = Decimal::from(0.5);
         assert_eq!((d3 * d4).to_string(), "52.500000");
         assert_eq!(((d1 * d2) + (d3 * d4)).to_string(), "202.500000");
-        let d5 = Decimal::try_from(2.0).unwrap();
+        let d5 = Decimal::from(2.0);
         let result = ((d1 * d2) + (d3 * d4)) / d5;
         assert_eq!(result.to_string(), "101.250000");
     }

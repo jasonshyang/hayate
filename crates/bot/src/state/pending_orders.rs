@@ -29,7 +29,7 @@ impl State<InternalEvent> for PendingOrdersState {
             InternalEvent::OrderCancelled(order) => {
                 self.cancel_order(order.oid);
             }
-            InternalEvent::OrderBookUpdate(_) => {}
+            InternalEvent::OrderBookUpdate(_) | InternalEvent::Trade(_) => {}
         }
 
         Ok(())

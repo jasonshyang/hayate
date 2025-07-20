@@ -91,8 +91,8 @@ impl PaperExchange {
         self.orderbook.process_event(event.clone())?;
         self.broadcaster.send(event)?;
 
-        let fills = self.fill_pending_orders();
-        for fill in fills {
+        let pending_order_fills = self.simulate_pending_order_fills();
+        for fill in pending_order_fills {
             let fill_event = InternalEvent::OrderFilled(fill);
             self.bot_position.process_event(fill_event.clone())?;
             self.pending_orders.process_event(fill_event.clone())?;
@@ -139,7 +139,7 @@ impl PaperExchange {
         self.next_oid += 1;
 
         // Simulate the fills
-        let fills = self.simulate_fill(&order, false);
+        let fills = self.simulate_fills(&order, false);
 
         // Update the pending orders state with the new order and broadcast the event
         let place_order_event = InternalEvent::OrderPlaced(order);
@@ -158,7 +158,34 @@ impl PaperExchange {
         Ok(())
     }
 
-    fn simulate_fill(&self, order: &Order, is_maker: bool) -> Vec<Fill> {
+    fn simulate_pending_order_fills(&self) -> Vec<Fill> {
+        let mut fills = Vec::new();
+        let pending_orders = self.pending_orders.get_inner();
+
+        if let Some(best_bid) = self.orderbook.get_inner().best_bid() {
+            for pending_ask in pending_orders.asks_iter() {
+                if pending_ask.price > best_bid {
+                    break; // No more pending asks can be filled
+                }
+
+                fills.extend(self.simulate_fills(pending_ask, true));
+            }
+        }
+
+        if let Some(best_ask) = self.orderbook.get_inner().best_ask() {
+            for pending_bid in pending_orders.bids_iter() {
+                if pending_bid.price < best_ask {
+                    break; // No more pending bids can be filled
+                }
+
+                fills.extend(self.simulate_fills(pending_bid, true));
+            }
+        }
+
+        fills
+    }
+
+    fn simulate_fills(&self, order: &Order, is_maker: bool) -> Vec<Fill> {
         let inner = self.orderbook.get_inner();
         let (fills, _) = match order.side {
             Side::Bid => inner.simulate_buy(order.price, order.size),
@@ -178,33 +205,6 @@ impl PaperExchange {
                 timestamp,
             })
             .collect::<Vec<_>>()
-    }
-
-    fn fill_pending_orders(&self) -> Vec<Fill> {
-        let mut fills = Vec::new();
-        let pending_orders = self.pending_orders.get_inner();
-
-        if let Some(best_bid) = self.orderbook.get_inner().best_bid() {
-            for pending_ask in pending_orders.asks_iter() {
-                if pending_ask.price > best_bid {
-                    break; // No more pending asks can be filled
-                }
-
-                fills.extend(self.simulate_fill(pending_ask, true));
-            }
-        }
-
-        if let Some(best_ask) = self.orderbook.get_inner().best_ask() {
-            for pending_bid in pending_orders.bids_iter() {
-                if pending_bid.price < best_ask {
-                    break; // No more pending bids can be filled
-                }
-
-                fills.extend(self.simulate_fill(pending_bid, true));
-            }
-        }
-
-        fills
     }
 
     fn produce_summary(&self) -> anyhow::Result<String> {

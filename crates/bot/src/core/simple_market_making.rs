@@ -31,8 +31,8 @@ impl Bot<SMMInput, BotAction> for SMM {
             }));
         }
 
-        let bid_spread = Decimal::try_from(self.bid_spread).unwrap();
-        let ask_spread = Decimal::try_from(self.ask_spread).unwrap();
+        let bid_spread = Decimal::from(self.bid_spread);
+        let ask_spread = Decimal::from(self.ask_spread);
 
         let mid_price = input
             .mid_price
@@ -94,6 +94,7 @@ impl Input<BotState> for SMMInput {
             BotState::PendingOrders(pending_orders) => {
                 self.pending_oids = pending_orders.get_inner().get_all_oids();
             }
+            BotState::Price(_) => {}
         }
         Ok(())
     }

@@ -28,9 +28,10 @@ impl State<InternalEvent> for OrderBookState {
                     self.update_delta(event.symbol, event.bids, event.asks)?;
                 }
             },
-            InternalEvent::OrderFilled(_) => {}
-            InternalEvent::OrderPlaced(_) => {}
-            InternalEvent::OrderCancelled(_) => {}
+            InternalEvent::OrderFilled(_)
+            | InternalEvent::OrderPlaced(_)
+            | InternalEvent::OrderCancelled(_)
+            | InternalEvent::Trade(_) => {}
         }
 
         Ok(())

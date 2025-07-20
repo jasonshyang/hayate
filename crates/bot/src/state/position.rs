@@ -23,9 +23,10 @@ impl State<InternalEvent> for PositionState {
             InternalEvent::OrderFilled(fill) => {
                 self.update_position(fill.side, fill.price, fill.size, fill.timestamp);
             }
-            InternalEvent::OrderCancelled(_) => {}
-            InternalEvent::OrderBookUpdate(_) => {}
-            InternalEvent::OrderPlaced(_) => {}
+            InternalEvent::OrderCancelled(_)
+            | InternalEvent::OrderPlaced(_)
+            | InternalEvent::OrderBookUpdate(_)
+            | InternalEvent::Trade(_) => {}
         }
 
         Ok(())
